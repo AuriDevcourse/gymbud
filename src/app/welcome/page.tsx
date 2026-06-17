@@ -4,8 +4,8 @@ import { getProfile } from "@/lib/store";
 
 export const dynamic = "force-dynamic";
 
-export default function WelcomePage() {
+export default async function WelcomePage() {
   // already set up -> straight to the app
-  if (getProfile().onboarded) redirect("/");
+  if ((await getProfile()).onboarded) redirect("/");
   return <WelcomeWizard />;
 }

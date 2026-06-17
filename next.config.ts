@@ -9,7 +9,7 @@ const csp = [
   "form-action 'self'",
   "frame-ancestors 'none'",
   "object-src 'none'",
-  "img-src 'self' data: blob:",
+  "img-src 'self' data: blob: https://cdn.jsdelivr.net",
   "font-src 'self' data:",
   "style-src 'self' 'unsafe-inline'",
   "script-src 'self' 'unsafe-inline'",
@@ -17,8 +17,6 @@ const csp = [
 ].join("; ");
 
 const nextConfig: NextConfig = {
-  // better-sqlite3 is a native module; keep it out of the bundle and use require()
-  serverExternalPackages: ["better-sqlite3"],
   poweredByHeader: false,
   async headers() {
     return [

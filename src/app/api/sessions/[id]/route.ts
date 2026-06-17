@@ -14,7 +14,7 @@ export async function GET(
 ) {
   const id = intParam((await params).id);
   if (!id) return fail(400, "bad_id", "Invalid session id.");
-  const s = getSession(id);
+  const s = await getSession(id);
   if (!s) return fail(404, "not_found", "Session not found.");
   return ok(s);
 }
@@ -25,18 +25,18 @@ export async function PATCH(
 ) {
   const id = intParam((await params).id);
   if (!id) return fail(400, "bad_id", "Invalid session id.");
-  if (!getSession(id)) return fail(404, "not_found", "Session not found.");
+  if (!(await getSession(id))) return fail(404, "not_found", "Session not found.");
 
   const body = await readBody(req, finishSchema);
   if ("error" in body) return body.error;
 
   if (body.data.finish) {
-    return ok(finishSession(id, body.data.note ?? null));
+    return ok(await finishSession(id, body.data.note ?? null));
   }
   if (body.data.note !== undefined) {
-    updateSessionNote(id, body.data.note);
+    await updateSessionNote(id, body.data.note);
   }
-  return ok(getSession(id));
+  return ok(await getSession(id));
 }
 
 export async function DELETE(
@@ -45,6 +45,6 @@ export async function DELETE(
 ) {
   const id = intParam((await params).id);
   if (!id) return fail(400, "bad_id", "Invalid session id.");
-  deleteSession(id);
+  await deleteSession(id);
   return ok({ deleted: true });
 }

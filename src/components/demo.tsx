@@ -10,6 +10,7 @@ interface Meta {
   frames: number;
   name?: string;
   instructions?: string[];
+  images?: string[];
 }
 
 function youtubeSearch(name: string): string {
@@ -67,16 +68,16 @@ export function DemoImage({
   return (
     <div>
       <div className="relative h-60 overflow-hidden rounded-[var(--radius-md)] bg-white">
-        {/* eslint-disable-next-line @next/next/no-img-element -- cached photo from our own API */}
+        {/* eslint-disable-next-line @next/next/no-img-element -- public-domain photo from CDN */}
         <img
-          src={`/api/demo/${exerciseId}/0`}
+          src={meta.images?.[0]}
           alt={`${name} start position`}
           className="absolute inset-0 mx-auto h-full w-full object-contain"
         />
-        {meta.frames > 1 && (
-          // eslint-disable-next-line @next/next/no-img-element -- cached photo from our own API
+        {meta.frames > 1 && meta.images?.[1] && (
+          // eslint-disable-next-line @next/next/no-img-element -- public-domain photo from CDN
           <img
-            src={`/api/demo/${exerciseId}/1`}
+            src={meta.images[1]}
             alt={`${name} end position`}
             className="demo-crossfade absolute inset-0 mx-auto h-full w-full object-contain"
           />

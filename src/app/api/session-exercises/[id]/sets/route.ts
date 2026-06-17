@@ -9,12 +9,12 @@ export async function POST(
 ) {
   const id = intParam((await params).id);
   if (!id) return fail(400, "bad_id", "Invalid id.");
-  if (sessionExerciseOwner(id) === null) return fail(404, "not_found", "Not found.");
+  if ((await sessionExerciseOwner(id)) === null) return fail(404, "not_found", "Not found.");
 
   const body = await readBody(req, setSchema);
   if ("error" in body) return body.error;
   return ok(
-    addSet(id, body.data.weight, body.data.reps, body.data.type ?? "normal"),
+    await addSet(id, body.data.weight, body.data.reps, body.data.type ?? "normal"),
     201,
   );
 }

@@ -15,7 +15,7 @@ export async function GET(
   if (!base) return fail(404, "not_found", "Unknown exercise.");
 
   const exclude = req.nextUrl.searchParams.get("exclude") as Equipment | null;
-  const available = getProfile().equipment;
+  const available = (await getProfile()).equipment;
 
   const alts = getAlternatives(id, {
     available,

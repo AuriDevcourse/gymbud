@@ -6,7 +6,7 @@ export const dynamic = "force-dynamic";
 // Health probe for zero-downtime deploys (WORKFLOW.md rule 4).
 export async function GET() {
   try {
-    getDb().prepare("SELECT 1").get();
+    await (await getDb()).execute("SELECT 1");
     return Response.json(
       { ok: true, auth: authEnabled() },
       { headers: { "Cache-Control": "no-store" } },

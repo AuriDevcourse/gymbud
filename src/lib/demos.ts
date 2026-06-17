@@ -1,17 +1,17 @@
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import path from "node:path";
-import { EXERCISES_BY_ID, type Equipment, type Exercise, type MuscleGroup } from "./exercise-library";
+import { getDb } from "./db";
+import {
+  EXERCISES_BY_ID,
+  type Equipment,
+  type Exercise,
+  type MuscleGroup,
+} from "./exercise-library";
 
-// Exercise demos from the open-source, PUBLIC-DOMAIN Free Exercise DB
-// (github.com/yuhonas/free-exercise-db). No API key, no cost. Each exercise has
-// 1-2 photos (start / end position) + written instructions. We match our
-// library to it, download the photos ONCE to data/demos/, and serve them from
-// our own origin so views are instant and work offline after the first fetch.
+// Exercise demos from the PUBLIC-DOMAIN Free Exercise DB
+// (github.com/yuhonas/free-exercise-db). No API key. We match our library to
+// it ONCE (cached in the demo_cache table), and the browser loads the photos
+// directly from the jsdelivr CDN — so this works on serverless (no disk).
 
 const CDN = "https://cdn.jsdelivr.net/gh/yuhonas/free-exercise-db@main";
-const DIR = path.join(process.cwd(), "data", "demos");
-const DB = path.join(DIR, "_db.json");
-const MAP = path.join(DIR, "_map.json");
 
 interface DbEntry {
   name: string;
@@ -20,52 +20,24 @@ interface DbEntry {
   instructions: string[];
   images: string[];
 }
-type MapEntry =
-  | { name: string; frames: number; instructions: string[] }
-  | { missing: true };
-type DemoMap = Record<string, MapEntry>;
 
-function readJson<T>(file: string): T | null {
-  try {
-    return JSON.parse(readFileSync(file, "utf8")) as T;
-  } catch {
-    return null;
-  }
-}
-function writeJson(file: string, data: unknown) {
-  mkdirSync(DIR, { recursive: true });
-  writeFileSync(file, JSON.stringify(data));
-}
-
-async function fetchWithTimeout(url: string, ms: number): Promise<Response | null> {
+let listCache: DbEntry[] | null = null; // per-instance memory cache
+async function loadList(): Promise<DbEntry[]> {
+  if (listCache) return listCache;
   const ctrl = new AbortController();
-  const t = setTimeout(() => ctrl.abort(), ms);
+  const t = setTimeout(() => ctrl.abort(), 12000);
   try {
-    return await fetch(url, { signal: ctrl.signal });
+    const res = await fetch(`${CDN}/dist/exercises.json`, { signal: ctrl.signal });
+    if (!res.ok) return [];
+    listCache = (await res.json()) as DbEntry[];
+    return listCache;
   } catch {
-    return null;
+    return [];
   } finally {
     clearTimeout(t);
   }
 }
 
-let dbCache: DbEntry[] | null = null;
-async function loadDb(): Promise<DbEntry[]> {
-  if (dbCache) return dbCache;
-  const onDisk = readJson<DbEntry[]>(DB);
-  if (onDisk) return (dbCache = onDisk);
-  const res = await fetchWithTimeout(`${CDN}/dist/exercises.json`, 12000);
-  if (!res || !res.ok) return [];
-  try {
-    const data = (await res.json()) as DbEntry[];
-    writeJson(DB, data);
-    return (dbCache = data);
-  } catch {
-    return [];
-  }
-}
-
-// Map our taxonomy to Free Exercise DB's vocabulary for scoring.
 const EQUIP: Record<Equipment, string[]> = {
   barbell: ["barbell"],
   dumbbell: ["dumbbell"],
@@ -93,9 +65,9 @@ const STOP = new Set(["barbell", "dumbbell", "cable", "machine", "smith", "band"
 
 function bestMatch(ex: Exercise, db: DbEntry[]): DbEntry | null {
   const exTokens = ex.name.toLowerCase().split(/\s+/).filter((w) => !STOP.has(w));
+  const exSet = new Set(exTokens);
   const wantEquip = EQUIP[ex.equipment];
   const wantMuscle = MUSCLE[ex.muscleGroup];
-  const exSet = new Set(exTokens);
   let best: DbEntry | null = null;
   let bestScore = -Infinity;
   for (const e of db) {
@@ -103,17 +75,15 @@ function bestMatch(ex: Exercise, db: DbEntry[]): DbEntry | null {
     const nameTokens = e.name.toLowerCase().split(/\s+/);
     const name = e.name.toLowerCase();
     let s = 0;
-    let nameHits = 0;
+    let hits = 0;
     for (const tok of exTokens)
       if (name.includes(tok)) {
         s += 2;
-        nameHits++;
+        hits++;
       }
-    if (nameHits === 0) continue; // no name overlap at all -> skip
+    if (hits === 0) continue;
     if (e.equipment && wantEquip.includes(e.equipment.toLowerCase())) s += 2;
     if (e.primaryMuscles?.some((m) => wantMuscle.includes(m.toLowerCase()))) s += 2;
-    // penalize unrequested modifiers (decline/incline/seated/...) so the
-    // plainest variant wins ties
     for (const t of nameTokens) if (!exSet.has(t) && !STOP.has(t)) s -= 1;
     if (s > bestScore) {
       bestScore = s;
@@ -128,63 +98,49 @@ export interface DemoMeta {
   frames: number;
   name?: string;
   instructions?: string[];
+  images?: string[]; // full CDN URLs
 }
 
 export async function getDemoMeta(ourId: string): Promise<DemoMeta> {
   const ex = EXERCISES_BY_ID[ourId];
   if (!ex) return { available: false, frames: 0 };
 
-  mkdirSync(DIR, { recursive: true });
-  const map = readJson<DemoMap>(MAP) ?? {};
-  const cached = map[ourId];
-  if (cached && "missing" in cached) return { available: false, frames: 0 };
-  if (cached && "frames" in cached && framesExist(ourId, cached.frames)) {
-    return { available: true, frames: cached.frames, name: cached.name, instructions: cached.instructions };
+  const db = await getDb();
+  const cached = (
+    await db.execute({
+      sql: "SELECT name, frames, instructions, images, missing FROM demo_cache WHERE exercise_id = ?",
+      args: [ourId],
+    })
+  ).rows[0];
+
+  if (cached) {
+    if (Number(cached.missing)) return { available: false, frames: 0 };
+    return {
+      available: true,
+      frames: Number(cached.frames),
+      name: String(cached.name),
+      instructions: JSON.parse(String(cached.instructions)),
+      images: JSON.parse(String(cached.images)),
+    };
   }
 
-  const db = await loadDb();
-  const match = db.length ? bestMatch(ex, db) : null;
+  const list = await loadList();
+  if (!list.length) return { available: false, frames: 0 }; // transient: don't cache
+
+  const match = bestMatch(ex, list);
   if (!match) {
-    map[ourId] = { missing: true };
-    writeJson(MAP, map);
+    await db.execute({
+      sql: "INSERT OR REPLACE INTO demo_cache (exercise_id, missing) VALUES (?, 1)",
+      args: [ourId],
+    });
     return { available: false, frames: 0 };
   }
 
-  const frames = await downloadFrames(ourId, match.images.slice(0, 2));
-  if (frames === 0) {
-    map[ourId] = { missing: true };
-    writeJson(MAP, map);
-    return { available: false, frames: 0 };
-  }
-  const entry = { name: match.name, frames, instructions: match.instructions ?? [] };
-  map[ourId] = entry;
-  writeJson(MAP, map);
-  return { available: true, ...entry };
-}
-
-function framesExist(ourId: string, n: number): boolean {
-  for (let i = 0; i < n; i++) if (!existsSync(framePath(ourId, i))) return false;
-  return n > 0;
-}
-function framePath(ourId: string, i: number): string {
-  return path.join(DIR, ourId, `${i}.jpg`);
-}
-
-async function downloadFrames(ourId: string, images: string[]): Promise<number> {
-  mkdirSync(path.join(DIR, ourId), { recursive: true });
-  let count = 0;
-  for (let i = 0; i < images.length; i++) {
-    const res = await fetchWithTimeout(`${CDN}/exercises/${images[i]}`, 12000);
-    if (!res || !res.ok) continue;
-    const ct = res.headers.get("content-type") ?? "";
-    if (!ct.startsWith("image/")) continue;
-    writeFileSync(framePath(ourId, i), Buffer.from(await res.arrayBuffer()));
-    count++;
-  }
-  return count;
-}
-
-export function getFrame(ourId: string, i: number): Buffer | null {
-  const fp = framePath(ourId, i);
-  return existsSync(fp) ? readFileSync(fp) : null;
+  const images = match.images.slice(0, 2).map((p) => `${CDN}/exercises/${p}`);
+  const instructions = match.instructions ?? [];
+  await db.execute({
+    sql: "INSERT OR REPLACE INTO demo_cache (exercise_id, name, frames, instructions, images, missing) VALUES (?, ?, ?, ?, ?, 0)",
+    args: [ourId, match.name, images.length, JSON.stringify(instructions), JSON.stringify(images)],
+  });
+  return { available: true, frames: images.length, name: match.name, instructions, images };
 }

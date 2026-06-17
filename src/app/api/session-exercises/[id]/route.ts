@@ -10,14 +10,14 @@ export async function PATCH(
 ) {
   const id = intParam((await params).id);
   if (!id) return fail(400, "bad_id", "Invalid id.");
-  if (sessionExerciseOwner(id) === null) return fail(404, "not_found", "Not found.");
+  if ((await sessionExerciseOwner(id)) === null) return fail(404, "not_found", "Not found.");
 
   const body = await readBody(req, swapSchema);
   if ("error" in body) return body.error;
   if (!knownExercise(body.data.swapTo)) {
     return fail(422, "unknown_exercise", "Unknown exercise.");
   }
-  swapExercise(id, body.data.swapTo);
+  await swapExercise(id, body.data.swapTo);
   return ok({ swapped: true });
 }
 
@@ -27,6 +27,6 @@ export async function DELETE(
 ) {
   const id = intParam((await params).id);
   if (!id) return fail(400, "bad_id", "Invalid id.");
-  removeExercise(id);
+  await removeExercise(id);
   return ok({ deleted: true });
 }

@@ -12,6 +12,6 @@ export async function GET(
   if (!EXERCISES_BY_ID[exerciseId]) return fail(404, "not_found", "Unknown exercise.");
   return ok({
     exercise: EXERCISES_BY_ID[exerciseId],
-    points: exerciseHistory(exerciseId),
+    points: await exerciseHistory(exerciseId),
   });
 }

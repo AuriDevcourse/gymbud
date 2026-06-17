@@ -1,5 +1,24 @@
 # Gym Coach — Session Handoff
 
+## DEPLOY MIGRATION (2026-06-17) — now Vercel-ready
+Moved off local better-sqlite3 (ephemeral on serverless) to **libSQL/Turso**:
+- `src/lib/db.ts`: `@libsql/client`. Local = `file:./data/gym.db` (no account, offline);
+  prod = Turso when `TURSO_DATABASE_URL`/`TURSO_AUTH_TOKEN` set. Same SQLite dialect.
+- `src/lib/store.ts`: **all functions are now async** (libSQL is async). Every caller
+  (route handlers + server components Home/welcome/progress) updated to `await`.
+- **Rate limiting** `src/lib/ratelimit.ts`: Upstash when `UPSTASH_REDIS_REST_*` set, else
+  in-memory. `proxy.ts` is now async and calls it.
+- **Demos** serverless-safe: matched once into `demo_cache` table; browser loads photos
+  straight from jsdelivr CDN (CSP `img-src` allows it). No disk writes. Removed the old
+  `/api/demo/[id]/[frame]` proxy + file cache.
+- `vercel.json` pins functions to `fra1` (EU). Verified locally in file mode (full flow + demos).
+
+**TO DEPLOY (Auri's next actions):** Turso DB `gymbud` (EU West Ireland) created. Need to:
+1. Turso: create token. 2. Upstash: create Redis, copy REST url+token. 3. Vercel: import the
+`gymbud` repo, add env vars TURSO_DATABASE_URL, TURSO_AUTH_TOKEN, UPSTASH_REDIS_REST_URL,
+UPSTASH_REDIS_REST_TOKEN, APP_PASSCODE. Deploy. (Risk to watch: Next 16 `proxy` runs on Node
+runtime — confirm Vercel runs it; if not, move rate-limit/gate into the routes.)
+
 ## Current state (2026-06-17)
 v1 core is **built, type-checks, lints clean, production-builds, and is smoke-tested end-to-end**.
 A personal, single-user, mobile-first PWA gym tracker. Next.js 16 + better-sqlite3 on a VPS.

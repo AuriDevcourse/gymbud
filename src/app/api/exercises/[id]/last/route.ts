@@ -17,8 +17,8 @@ export async function GET(
   const excludeParam = req.nextUrl.searchParams.get("session");
   const exclude = excludeParam ? Number(excludeParam) : undefined;
 
-  const last = lastPerformance(id, exclude && exclude > 0 ? exclude : undefined);
-  const profile = getProfile();
+  const last = await lastPerformance(id, exclude && exclude > 0 ? exclude : undefined);
+  const profile = await getProfile();
 
   // Today's target is derived from last time's WORKING sets vs the goal range.
   const target = recommendNext(

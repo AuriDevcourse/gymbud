@@ -24,19 +24,22 @@ function greeting(): string {
   return "Good evening";
 }
 
-export default function Home() {
-  const profile = getProfile();
+export default async function Home() {
+  const profile = await getProfile();
   if (!profile.onboarded) redirect("/welcome");
-  const active = activeSession();
-  const bw = latestBodyWeight();
-  const sessions = listSessions(5);
+  const [active, bw, sessions, daysSince] = await Promise.all([
+    activeSession(),
+    latestBodyWeight(),
+    listSessions(5),
+    daysSinceByMuscle(),
+  ]);
   const lastDone = sessions.find((s) => s.finishedAt);
 
   const suggestion = suggestWorkout({
     goal: profile.goal,
     daysPerWeek: profile.daysPerWeek,
     available: profile.equipment,
-    daysSince: daysSinceByMuscle(),
+    daysSince,
   });
 
   return (

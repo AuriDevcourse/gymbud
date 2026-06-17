@@ -4,5 +4,5 @@ import { activeSession } from "@/lib/store";
 export const dynamic = "force-dynamic";
 
 export async function GET() {
-  return ok(activeSession());
+  return ok(await activeSession());
 }

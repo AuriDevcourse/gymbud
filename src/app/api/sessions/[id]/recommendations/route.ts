@@ -12,27 +12,29 @@ export async function GET(
 ) {
   const id = intParam((await params).id);
   if (!id) return fail(400, "bad_id", "Invalid session id.");
-  const session = getSession(id);
+  const session = await getSession(id);
   if (!session) return fail(404, "not_found", "Session not found.");
 
-  const profile = getProfile();
+  const profile = await getProfile();
   const working = (sets: { weight: number; reps: number; type: string }[]) =>
     sets.filter((s) => s.type !== "warmup").map((s) => ({ weight: s.weight, reps: s.reps }));
 
-  const recs = session.exercises.map((se) => {
-    const last = lastPerformance(se.exerciseId, id);
-    const rec = recommendNext(
-      working(se.sets),
-      working(last?.sets ?? []),
-      profile.goal,
-      profile.unit,
-    );
-    return {
-      exerciseId: se.exerciseId,
-      name: EXERCISES_BY_ID[se.exerciseId]?.name ?? se.exerciseId,
-      recommendation: rec,
-    };
-  });
+  const recs = await Promise.all(
+    session.exercises.map(async (se) => {
+      const last = await lastPerformance(se.exerciseId, id);
+      const rec = recommendNext(
+        working(se.sets),
+        working(last?.sets ?? []),
+        profile.goal,
+        profile.unit,
+      );
+      return {
+        exerciseId: se.exerciseId,
+        name: EXERCISES_BY_ID[se.exerciseId]?.name ?? se.exerciseId,
+        recommendation: rec,
+      };
+    }),
+  );
 
   return ok({ sessionId: id, recommendations: recs });
 }

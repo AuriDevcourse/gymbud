@@ -1,3 +1,4 @@
+import type { InValue, Row } from "@libsql/client";
 import { getDb } from "./db";
 import { parseDbDate } from "./date";
 import { EXERCISES_BY_ID, type MuscleGroup } from "./exercise-library";
@@ -9,45 +10,45 @@ import type {
   SetLog,
 } from "./types";
 
-// ── Profile ───────────────────────────────────────────────────────────────
-interface ProfileRow {
-  goal: string;
-  days_per_week: number;
-  equipment: string;
-  unit: string;
-  onboarded: number;
-  updated_at: string;
+// thin helpers over the libSQL client
+async function all(sql: string, args: InValue[] = []): Promise<Row[]> {
+  return (await (await getDb()).execute({ sql, args })).rows;
+}
+async function one(sql: string, args: InValue[] = []): Promise<Row | undefined> {
+  return (await all(sql, args))[0];
+}
+async function run(
+  sql: string,
+  args: InValue[] = [],
+): Promise<{ lastId: number; changes: number }> {
+  const r = await (await getDb()).execute({ sql, args });
+  return { lastId: Number(r.lastInsertRowid ?? 0), changes: r.rowsAffected };
 }
 
-export function getProfile(): Profile {
-  const row = getDb()
-    .prepare("SELECT * FROM profile WHERE id = 1")
-    .get() as ProfileRow;
+const num = (v: unknown) => Number(v);
+const str = (v: unknown) => String(v);
+
+// ── Profile ───────────────────────────────────────────────────────────────
+export async function getProfile(): Promise<Profile> {
+  const row = (await one("SELECT * FROM profile WHERE id = 1"))!;
   return {
-    goal: row.goal as Profile["goal"],
-    daysPerWeek: row.days_per_week,
-    equipment: safeJson(row.equipment),
-    unit: row.unit as Profile["unit"],
-    onboarded: Boolean(row.onboarded),
-    updatedAt: row.updated_at,
+    goal: str(row.goal) as Profile["goal"],
+    daysPerWeek: num(row.days_per_week),
+    equipment: safeJson(str(row.equipment)),
+    unit: str(row.unit) as Profile["unit"],
+    onboarded: Boolean(num(row.onboarded)),
+    updatedAt: str(row.updated_at),
   };
 }
 
-export function updateProfile(p: Partial<Profile>): Profile {
-  const cur = getProfile();
+export async function updateProfile(p: Partial<Profile>): Promise<Profile> {
+  const cur = await getProfile();
   const next = { ...cur, ...p };
-  getDb()
-    .prepare(
-      `UPDATE profile SET goal = ?, days_per_week = ?, equipment = ?, unit = ?,
-       onboarded = ?, updated_at = datetime('now') WHERE id = 1`,
-    )
-    .run(
-      next.goal,
-      next.daysPerWeek,
-      JSON.stringify(next.equipment),
-      next.unit,
-      next.onboarded ? 1 : 0,
-    );
+  await run(
+    `UPDATE profile SET goal = ?, days_per_week = ?, equipment = ?, unit = ?,
+     onboarded = ?, updated_at = datetime('now') WHERE id = 1`,
+    [next.goal, next.daysPerWeek, JSON.stringify(next.equipment), next.unit, next.onboarded ? 1 : 0],
+  );
   return getProfile();
 }
 
@@ -61,32 +62,27 @@ function safeJson(s: string): Profile["equipment"] {
 }
 
 // ── Body weight ─────────────────────────────────────────────────────────────
-export function listBodyWeight(): BodyWeightEntry[] {
-  const rows = getDb()
-    .prepare(
-      "SELECT id, weight, logged_at FROM bodyweight_log ORDER BY logged_at ASC, id ASC",
-    )
-    .all() as { id: number; weight: number; logged_at: string }[];
-  return rows.map((r) => ({ id: r.id, weight: r.weight, loggedAt: r.logged_at }));
+export async function listBodyWeight(): Promise<BodyWeightEntry[]> {
+  const rows = await all(
+    "SELECT id, weight, logged_at FROM bodyweight_log ORDER BY logged_at ASC, id ASC",
+  );
+  return rows.map((r) => ({ id: num(r.id), weight: num(r.weight), loggedAt: str(r.logged_at) }));
 }
 
-export function latestBodyWeight(): BodyWeightEntry | null {
-  const r = getDb()
-    .prepare(
-      "SELECT id, weight, logged_at FROM bodyweight_log ORDER BY logged_at DESC, id DESC LIMIT 1",
-    )
-    .get() as { id: number; weight: number; logged_at: string } | undefined;
-  return r ? { id: r.id, weight: r.weight, loggedAt: r.logged_at } : null;
+export async function latestBodyWeight(): Promise<BodyWeightEntry | null> {
+  const r = await one(
+    "SELECT id, weight, logged_at FROM bodyweight_log ORDER BY logged_at DESC, id DESC LIMIT 1",
+  );
+  return r ? { id: num(r.id), weight: num(r.weight), loggedAt: str(r.logged_at) } : null;
 }
 
-export function addBodyWeight(weight: number, loggedAt: string): BodyWeightEntry {
-  // one entry per day — overwrite if the day already exists
-  const db = getDb();
-  db.prepare("DELETE FROM bodyweight_log WHERE logged_at = ?").run(loggedAt);
-  const info = db
-    .prepare("INSERT INTO bodyweight_log (weight, logged_at) VALUES (?, ?)")
-    .run(weight, loggedAt);
-  return { id: Number(info.lastInsertRowid), weight, loggedAt };
+export async function addBodyWeight(weight: number, loggedAt: string): Promise<BodyWeightEntry> {
+  await run("DELETE FROM bodyweight_log WHERE logged_at = ?", [loggedAt]);
+  const { lastId } = await run(
+    "INSERT INTO bodyweight_log (weight, logged_at) VALUES (?, ?)",
+    [weight, loggedAt],
+  );
+  return { id: lastId, weight, loggedAt };
 }
 
 // ── Sessions ────────────────────────────────────────────────────────────────
@@ -100,255 +96,216 @@ export interface SessionSummary {
   volume: number;
 }
 
-export function listSessions(limit = 60): SessionSummary[] {
-  const rows = getDb()
-    .prepare(
-      `SELECT s.id, s.started_at, s.finished_at, s.note,
-              COUNT(DISTINCT se.id) AS exercise_count,
-              COUNT(sl.id)          AS set_count,
-              COALESCE(SUM(sl.weight * sl.reps), 0) AS volume
-       FROM session s
-       LEFT JOIN session_exercise se ON se.session_id = s.id
-       LEFT JOIN set_log sl          ON sl.session_exercise_id = se.id
-       GROUP BY s.id
-       ORDER BY s.started_at DESC
-       LIMIT ?`,
-    )
-    .all(limit) as {
-    id: number;
-    started_at: string;
-    finished_at: string | null;
-    note: string | null;
-    exercise_count: number;
-    set_count: number;
-    volume: number;
-  }[];
+export async function listSessions(limit = 60): Promise<SessionSummary[]> {
+  const rows = await all(
+    `SELECT s.id, s.started_at, s.finished_at, s.note,
+            COUNT(DISTINCT se.id) AS exercise_count,
+            COUNT(sl.id)          AS set_count,
+            COALESCE(SUM(sl.weight * sl.reps), 0) AS volume
+     FROM session s
+     LEFT JOIN session_exercise se ON se.session_id = s.id
+     LEFT JOIN set_log sl          ON sl.session_exercise_id = se.id
+     GROUP BY s.id
+     ORDER BY s.started_at DESC
+     LIMIT ?`,
+    [limit],
+  );
   return rows.map((r) => ({
-    id: r.id,
-    startedAt: r.started_at,
-    finishedAt: r.finished_at,
-    note: r.note,
-    exerciseCount: r.exercise_count,
-    setCount: r.set_count,
-    volume: r.volume,
+    id: num(r.id),
+    startedAt: str(r.started_at),
+    finishedAt: r.finished_at === null ? null : str(r.finished_at),
+    note: r.note === null ? null : str(r.note),
+    exerciseCount: num(r.exercise_count),
+    setCount: num(r.set_count),
+    volume: num(r.volume),
   }));
 }
 
-export function activeSession(): Session | null {
-  const r = getDb()
-    .prepare(
-      "SELECT id FROM session WHERE finished_at IS NULL ORDER BY started_at DESC LIMIT 1",
-    )
-    .get() as { id: number } | undefined;
-  return r ? getSession(r.id) : null;
+export async function activeSession(): Promise<Session | null> {
+  const r = await one(
+    "SELECT id FROM session WHERE finished_at IS NULL ORDER BY started_at DESC LIMIT 1",
+  );
+  return r ? getSession(num(r.id)) : null;
 }
 
-export function getSession(id: number): Session | null {
-  const db = getDb();
-  const s = db
-    .prepare("SELECT id, started_at, finished_at, note FROM session WHERE id = ?")
-    .get(id) as
-    | { id: number; started_at: string; finished_at: string | null; note: string | null }
-    | undefined;
+export async function getSession(id: number): Promise<Session | null> {
+  const s = await one(
+    "SELECT id, started_at, finished_at, note FROM session WHERE id = ?",
+    [id],
+  );
   if (!s) return null;
 
-  const ses = db
-    .prepare(
-      "SELECT id, session_id, exercise_id, order_index FROM session_exercise WHERE session_id = ? ORDER BY order_index ASC, id ASC",
-    )
-    .all(id) as {
-    id: number;
-    session_id: number;
-    exercise_id: string;
-    order_index: number;
-  }[];
-
-  const setStmt = db.prepare(
-    "SELECT id, session_exercise_id, set_index, weight, reps, type FROM set_log WHERE session_exercise_id = ? ORDER BY set_index ASC, id ASC",
+  const ses = await all(
+    "SELECT id, session_id, exercise_id, order_index FROM session_exercise WHERE session_id = ? ORDER BY order_index ASC, id ASC",
+    [id],
   );
 
-  const exercises: SessionExercise[] = ses.map((e) => ({
-    id: e.id,
-    sessionId: e.session_id,
-    exerciseId: e.exercise_id,
-    orderIndex: e.order_index,
-    sets: (setStmt.all(e.id) as SetRow[]).map(toSet),
-  }));
+  const exercises: SessionExercise[] = [];
+  for (const e of ses) {
+    const seId = num(e.id);
+    const setRows = await all(
+      "SELECT id, session_exercise_id, set_index, weight, reps, type FROM set_log WHERE session_exercise_id = ? ORDER BY set_index ASC, id ASC",
+      [seId],
+    );
+    exercises.push({
+      id: seId,
+      sessionId: num(e.session_id),
+      exerciseId: str(e.exercise_id),
+      orderIndex: num(e.order_index),
+      sets: setRows.map(toSet),
+    });
+  }
 
   return {
-    id: s.id,
-    startedAt: s.started_at,
-    finishedAt: s.finished_at,
-    note: s.note,
+    id: num(s.id),
+    startedAt: str(s.started_at),
+    finishedAt: s.finished_at === null ? null : str(s.finished_at),
+    note: s.note === null ? null : str(s.note),
     exercises,
   };
 }
 
-type SetRow = {
-  id: number;
-  session_exercise_id: number;
-  set_index: number;
-  weight: number;
-  reps: number;
-  type: string;
-};
-const toSet = (r: SetRow): SetLog => ({
-  id: r.id,
-  sessionExerciseId: r.session_exercise_id,
-  setIndex: r.set_index,
-  weight: r.weight,
-  reps: r.reps,
-  type: (r.type as SetLog["type"]) ?? "normal",
+const toSet = (r: Row): SetLog => ({
+  id: num(r.id),
+  sessionExerciseId: num(r.session_exercise_id),
+  setIndex: num(r.set_index),
+  weight: num(r.weight),
+  reps: num(r.reps),
+  type: (str(r.type) as SetLog["type"]) ?? "normal",
 });
 
-export function createSession(): Session {
-  const info = getDb().prepare("INSERT INTO session DEFAULT VALUES").run();
-  return getSession(Number(info.lastInsertRowid))!;
+export async function createSession(): Promise<Session> {
+  const { lastId } = await run("INSERT INTO session DEFAULT VALUES");
+  return (await getSession(lastId))!;
 }
 
-export function finishSession(id: number, note?: string | null): Session | null {
-  const db = getDb();
+export async function finishSession(
+  id: number,
+  note?: string | null,
+): Promise<Session | null> {
   if (note !== undefined) {
-    db.prepare(
-      "UPDATE session SET finished_at = datetime('now'), note = ? WHERE id = ?",
-    ).run(note, id);
+    await run("UPDATE session SET finished_at = datetime('now'), note = ? WHERE id = ?", [
+      note,
+      id,
+    ]);
   } else {
-    db.prepare(
-      "UPDATE session SET finished_at = datetime('now') WHERE id = ?",
-    ).run(id);
+    await run("UPDATE session SET finished_at = datetime('now') WHERE id = ?", [id]);
   }
   return getSession(id);
 }
 
-export function updateSessionNote(id: number, note: string | null): void {
-  getDb().prepare("UPDATE session SET note = ? WHERE id = ?").run(note, id);
+export async function updateSessionNote(id: number, note: string | null): Promise<void> {
+  await run("UPDATE session SET note = ? WHERE id = ?", [note, id]);
 }
 
-export function deleteSession(id: number): void {
-  getDb().prepare("DELETE FROM session WHERE id = ?").run(id);
+export async function deleteSession(id: number): Promise<void> {
+  await run("DELETE FROM session WHERE id = ?", [id]);
 }
 
 // ── Session exercises ─────────────────────────────────────────────────────
-export function addExercise(sessionId: number, exerciseId: string): SessionExercise {
-  const db = getDb();
-  const max = db
-    .prepare(
-      "SELECT COALESCE(MAX(order_index), -1) AS m FROM session_exercise WHERE session_id = ?",
-    )
-    .get(sessionId) as { m: number };
-  const info = db
-    .prepare(
-      "INSERT INTO session_exercise (session_id, exercise_id, order_index) VALUES (?, ?, ?)",
-    )
-    .run(sessionId, exerciseId, max.m + 1);
-  return {
-    id: Number(info.lastInsertRowid),
-    sessionId,
-    exerciseId,
-    orderIndex: max.m + 1,
-    sets: [],
-  };
-}
-
-export function removeExercise(sessionExerciseId: number): void {
-  getDb().prepare("DELETE FROM session_exercise WHERE id = ?").run(sessionExerciseId);
-}
-
-// Swap the movement (taken machine etc). Logged sets are cleared since the
-// load won't carry over to a different exercise.
-export function swapExercise(sessionExerciseId: number, newExerciseId: string): void {
-  const db = getDb();
-  db.prepare("DELETE FROM set_log WHERE session_exercise_id = ?").run(
-    sessionExerciseId,
+export async function addExercise(
+  sessionId: number,
+  exerciseId: string,
+): Promise<SessionExercise> {
+  const max = await one(
+    "SELECT COALESCE(MAX(order_index), -1) AS m FROM session_exercise WHERE session_id = ?",
+    [sessionId],
   );
-  db.prepare("UPDATE session_exercise SET exercise_id = ? WHERE id = ?").run(
+  const orderIndex = num(max!.m) + 1;
+  const { lastId } = await run(
+    "INSERT INTO session_exercise (session_id, exercise_id, order_index) VALUES (?, ?, ?)",
+    [sessionId, exerciseId, orderIndex],
+  );
+  return { id: lastId, sessionId, exerciseId, orderIndex, sets: [] };
+}
+
+export async function removeExercise(sessionExerciseId: number): Promise<void> {
+  await run("DELETE FROM session_exercise WHERE id = ?", [sessionExerciseId]);
+}
+
+// Swap the movement. Logged sets are cleared since the load won't carry over.
+export async function swapExercise(
+  sessionExerciseId: number,
+  newExerciseId: string,
+): Promise<void> {
+  await run("DELETE FROM set_log WHERE session_exercise_id = ?", [sessionExerciseId]);
+  await run("UPDATE session_exercise SET exercise_id = ? WHERE id = ?", [
     newExerciseId,
     sessionExerciseId,
-  );
+  ]);
 }
 
-export function sessionExerciseOwner(sessionExerciseId: number): number | null {
-  const r = getDb()
-    .prepare("SELECT session_id FROM session_exercise WHERE id = ?")
-    .get(sessionExerciseId) as { session_id: number } | undefined;
-  return r ? r.session_id : null;
+export async function sessionExerciseOwner(
+  sessionExerciseId: number,
+): Promise<number | null> {
+  const r = await one("SELECT session_id FROM session_exercise WHERE id = ?", [
+    sessionExerciseId,
+  ]);
+  return r ? num(r.session_id) : null;
 }
 
 // ── Sets ────────────────────────────────────────────────────────────────────
-export function addSet(
+export async function addSet(
   sessionExerciseId: number,
   weight: number,
   reps: number,
   type: SetLog["type"] = "normal",
-): SetLog {
-  const db = getDb();
-  const max = db
-    .prepare(
-      "SELECT COALESCE(MAX(set_index), -1) AS m FROM set_log WHERE session_exercise_id = ?",
-    )
-    .get(sessionExerciseId) as { m: number };
-  const info = db
-    .prepare(
-      "INSERT INTO set_log (session_exercise_id, set_index, weight, reps, type) VALUES (?, ?, ?, ?, ?)",
-    )
-    .run(sessionExerciseId, max.m + 1, weight, reps, type);
-  return {
-    id: Number(info.lastInsertRowid),
-    sessionExerciseId,
-    setIndex: max.m + 1,
-    weight,
-    reps,
-    type,
-  };
+): Promise<SetLog> {
+  const max = await one(
+    "SELECT COALESCE(MAX(set_index), -1) AS m FROM set_log WHERE session_exercise_id = ?",
+    [sessionExerciseId],
+  );
+  const setIndex = num(max!.m) + 1;
+  const { lastId } = await run(
+    "INSERT INTO set_log (session_exercise_id, set_index, weight, reps, type) VALUES (?, ?, ?, ?, ?)",
+    [sessionExerciseId, setIndex, weight, reps, type],
+  );
+  return { id: lastId, sessionExerciseId, setIndex, weight, reps, type };
 }
 
-export function updateSet(
+export async function updateSet(
   setId: number,
   weight: number,
   reps: number,
   type: SetLog["type"] = "normal",
-): void {
-  getDb()
-    .prepare("UPDATE set_log SET weight = ?, reps = ?, type = ? WHERE id = ?")
-    .run(weight, reps, type, setId);
+): Promise<void> {
+  await run("UPDATE set_log SET weight = ?, reps = ?, type = ? WHERE id = ?", [
+    weight,
+    reps,
+    type,
+    setId,
+  ]);
 }
 
-export function deleteSet(setId: number): void {
-  getDb().prepare("DELETE FROM set_log WHERE id = ?").run(setId);
+export async function deleteSet(setId: number): Promise<void> {
+  await run("DELETE FROM set_log WHERE id = ?", [setId]);
 }
 
 // ── Coach inputs ──────────────────────────────────────────────────────────
-/** Sets from the most recent time this exercise was done (before `excludeSessionId`). */
-export function lastPerformance(
+export async function lastPerformance(
   exerciseId: string,
   excludeSessionId?: number,
-): { sessionId: number; date: string; sets: SetLog[] } | null {
-  const db = getDb();
-  const row = db
-    .prepare(
-      `SELECT se.id AS se_id, s.id AS session_id, s.started_at
-       FROM session_exercise se
-       JOIN session s ON s.id = se.session_id
-       WHERE se.exercise_id = ? AND s.id != ?
-       ORDER BY s.started_at DESC, se.id DESC
-       LIMIT 1`,
-    )
-    .get(exerciseId, excludeSessionId ?? -1) as
-    | { se_id: number; session_id: number; started_at: string }
-    | undefined;
+): Promise<{ sessionId: number; date: string; sets: SetLog[] } | null> {
+  const row = await one(
+    `SELECT se.id AS se_id, s.id AS session_id, s.started_at
+     FROM session_exercise se
+     JOIN session s ON s.id = se.session_id
+     WHERE se.exercise_id = ? AND s.id != ?
+     ORDER BY s.started_at DESC, se.id DESC
+     LIMIT 1`,
+    [exerciseId, excludeSessionId ?? -1],
+  );
   if (!row) return null;
   const sets = (
-    db
-      .prepare(
-        "SELECT id, session_exercise_id, set_index, weight, reps, type FROM set_log WHERE session_exercise_id = ? ORDER BY set_index ASC",
-      )
-      .all(row.se_id) as SetRow[]
+    await all(
+      "SELECT id, session_exercise_id, set_index, weight, reps, type FROM set_log WHERE session_exercise_id = ? ORDER BY set_index ASC",
+      [num(row.se_id)],
+    )
   ).map(toSet);
   if (!sets.length) return null;
-  return { sessionId: row.session_id, date: row.started_at, sets };
+  return { sessionId: num(row.session_id), date: str(row.started_at), sets };
 }
 
-/** Per-session top set + volume for one exercise, oldest first (for charts). */
 export interface ExercisePoint {
   date: string;
   topWeight: number;
@@ -356,81 +313,67 @@ export interface ExercisePoint {
   volume: number;
   est1rm: number;
 }
-export function exerciseHistory(exerciseId: string): ExercisePoint[] {
-  const db = getDb();
-  const rows = db
-    .prepare(
-      `SELECT s.started_at,
-              MAX(sl.weight) AS top_weight,
-              SUM(sl.weight * sl.reps) AS volume
-       FROM session_exercise se
-       JOIN session s  ON s.id = se.session_id
-       JOIN set_log sl ON sl.session_exercise_id = se.id
-       WHERE se.exercise_id = ?
-       GROUP BY s.id
-       ORDER BY s.started_at ASC`,
-    )
-    .all(exerciseId) as {
-    started_at: string;
-    top_weight: number;
-    volume: number;
-  }[];
-
-  // reps at the top weight for each session
-  const repStmt = db.prepare(
-    `SELECT MAX(sl.reps) AS reps
+export async function exerciseHistory(exerciseId: string): Promise<ExercisePoint[]> {
+  const rows = await all(
+    `SELECT s.started_at,
+            MAX(sl.weight) AS top_weight,
+            SUM(sl.weight * sl.reps) AS volume
      FROM session_exercise se
-     JOIN session s ON s.id = se.session_id
+     JOIN session s  ON s.id = se.session_id
      JOIN set_log sl ON sl.session_exercise_id = se.id
-     WHERE se.exercise_id = ? AND date(s.started_at) = date(?) AND sl.weight = ?`,
+     WHERE se.exercise_id = ?
+     GROUP BY s.id
+     ORDER BY s.started_at ASC`,
+    [exerciseId],
   );
 
-  return rows.map((r) => {
-    const rep = repStmt.get(exerciseId, r.started_at, r.top_weight) as {
-      reps: number | null;
-    };
-    const reps = rep.reps ?? 0;
-    return {
-      date: r.started_at,
-      topWeight: r.top_weight,
-      reps,
-      volume: r.volume,
-      est1rm: Math.round(r.top_weight * (1 + reps / 30)), // Epley
-    };
-  });
-}
-
-/** Distinct exercise ids that have ever been logged (for the progress picker). */
-export function loggedExerciseIds(): string[] {
-  const rows = getDb()
-    .prepare(
-      `SELECT DISTINCT se.exercise_id AS id
+  const points: ExercisePoint[] = [];
+  for (const r of rows) {
+    const topWeight = num(r.top_weight);
+    const rep = await one(
+      `SELECT MAX(sl.reps) AS reps
        FROM session_exercise se
-       JOIN set_log sl ON sl.session_exercise_id = se.id`,
-    )
-    .all() as { id: string }[];
-  return rows.map((r) => r.id);
-}
-
-/** Days since each muscle group was last trained (for suggestions). */
-export function daysSinceByMuscle(): Partial<Record<MuscleGroup, number>> {
-  const db = getDb();
-  const rows = db
-    .prepare(
-      `SELECT se.exercise_id AS id, MAX(s.started_at) AS last
-       FROM session_exercise se
-       JOIN session s  ON s.id = se.session_id
+       JOIN session s ON s.id = se.session_id
        JOIN set_log sl ON sl.session_exercise_id = se.id
-       GROUP BY se.exercise_id`,
-    )
-    .all() as { id: string; last: string }[];
+       WHERE se.exercise_id = ? AND date(s.started_at) = date(?) AND sl.weight = ?`,
+      [exerciseId, str(r.started_at), topWeight],
+    );
+    const reps = rep && rep.reps !== null ? num(rep.reps) : 0;
+    points.push({
+      date: str(r.started_at),
+      topWeight,
+      reps,
+      volume: num(r.volume),
+      est1rm: Math.round(topWeight * (1 + reps / 30)),
+    });
+  }
+  return points;
+}
+
+export async function loggedExerciseIds(): Promise<string[]> {
+  const rows = await all(
+    `SELECT DISTINCT se.exercise_id AS id
+     FROM session_exercise se
+     JOIN set_log sl ON sl.session_exercise_id = se.id`,
+  );
+  return rows.map((r) => str(r.id));
+}
+
+export async function daysSinceByMuscle(): Promise<Partial<Record<MuscleGroup, number>>> {
+  const rows = await all(
+    `SELECT se.exercise_id AS id, MAX(s.started_at) AS last
+     FROM session_exercise se
+     JOIN session s  ON s.id = se.session_id
+     JOIN set_log sl ON sl.session_exercise_id = se.id
+     GROUP BY se.exercise_id`,
+  );
 
   const now = Date.now();
   const out: Partial<Record<MuscleGroup, number>> = {};
   for (const r of rows) {
-    const ex = EXERCISES_BY_ID[r.id];
+    const ex = EXERCISES_BY_ID[str(r.id)];
     if (!ex) continue;
-    const days = (now - parseDbDate(r.last).getTime()) / 86_400_000;
+    const days = (now - parseDbDate(str(r.last)).getTime()) / 86_400_000;
     for (const m of [ex.muscleGroup, ...(ex.secondary ?? [])]) {
       const prev = out[m];
       if (prev === undefined || days < prev) out[m] = days;

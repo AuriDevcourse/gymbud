@@ -11,7 +11,7 @@ export async function PATCH(
   if (!id) return fail(400, "bad_id", "Invalid id.");
   const body = await readBody(req, setSchema);
   if ("error" in body) return body.error;
-  updateSet(id, body.data.weight, body.data.reps, body.data.type ?? "normal");
+  await updateSet(id, body.data.weight, body.data.reps, body.data.type ?? "normal");
   return ok({ updated: true });
 }
 
@@ -21,6 +21,6 @@ export async function DELETE(
 ) {
   const id = intParam((await params).id);
   if (!id) return fail(400, "bad_id", "Invalid id.");
-  deleteSet(id);
+  await deleteSet(id);
   return ok({ deleted: true });
 }

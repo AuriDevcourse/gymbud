@@ -4,17 +4,23 @@ import { getProfile, listBodyWeight, listSessions, loggedExerciseIds } from "@/l
 
 export const dynamic = "force-dynamic";
 
-export default function ProgressPage() {
-  const exercises = loggedExerciseIds()
+export default async function ProgressPage() {
+  const [ids, bodyweight, sessions, profile] = await Promise.all([
+    loggedExerciseIds(),
+    listBodyWeight(),
+    listSessions(),
+    getProfile(),
+  ]);
+  const exercises = ids
     .map((id) => ({ id, name: EXERCISES_BY_ID[id]?.name ?? id }))
     .sort((a, b) => a.name.localeCompare(b.name));
 
   return (
     <ProgressClient
       exercises={exercises}
-      bodyweight={listBodyWeight()}
-      sessions={listSessions()}
-      unit={getProfile().unit}
+      bodyweight={bodyweight}
+      sessions={sessions}
+      unit={profile.unit}
     />
   );
 }
