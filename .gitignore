@@ -33,6 +33,17 @@ yarn-error.log*
 # env files (can opt-in for committing if needed)
 .env*
 
+# local sqlite database + secrets (never commit)
+/data/
+*.db
+*.db-shm
+*.db-wal
+*.key
+*credentials*.json
+*client_secret*.json
+token.json
+cookies.txt
+
 # vercel
 .vercel
 
