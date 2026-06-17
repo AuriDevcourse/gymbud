@@ -20,13 +20,13 @@ const oswald = Oswald({
 });
 
 export const metadata: Metadata = {
-  title: "Coach · Gym Tracker",
-  description: "Your personal gym coach. Log lifts, track progress, never get stuck.",
+  title: "GymBud · Gym Tracker",
+  description: "Your personal gym buddy. Log lifts, track progress, never get stuck.",
   manifest: "/manifest.webmanifest",
   appleWebApp: {
     capable: true,
     statusBarStyle: "black-translucent",
-    title: "Coach",
+    title: "GymBud",
   },
 };
 

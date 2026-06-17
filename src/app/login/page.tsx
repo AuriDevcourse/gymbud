@@ -35,7 +35,7 @@ export default function LoginPage() {
         <span className="flex h-14 w-14 items-center justify-center rounded-2xl bg-accent/10 text-accent">
           <Lock size={26} aria-hidden="true" />
         </span>
-        <h1 className="display text-2xl font-bold">Coach is locked</h1>
+        <h1 className="display text-2xl font-bold">GymBud is locked</h1>
         <p className="text-sm text-muted">Enter your passcode to continue.</p>
       </div>
 

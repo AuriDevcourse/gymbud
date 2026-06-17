@@ -69,7 +69,7 @@ export function WelcomeWizard() {
           <Dumbbell size={22} aria-hidden="true" />
         </span>
         <div>
-          <h1 className="display text-2xl font-bold leading-tight">Welcome to Coach</h1>
+          <h1 className="display text-2xl font-bold leading-tight">Welcome to GymBud</h1>
           <p className="text-sm text-muted">Set yourself up. Takes 20 seconds.</p>
         </div>
       </div>

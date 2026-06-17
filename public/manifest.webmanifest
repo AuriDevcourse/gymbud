@@ -1,7 +1,7 @@
 {
-  "name": "Coach — Gym Tracker",
-  "short_name": "Coach",
-  "description": "Your personal gym coach. Log lifts, track progress, never get stuck.",
+  "name": "GymBud",
+  "short_name": "GymBud",
+  "description": "Your personal gym buddy. Log lifts, track progress, never get stuck.",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#0a0c0e",

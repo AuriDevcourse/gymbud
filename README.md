@@ -1,4 +1,4 @@
-# Coach — Personal Gym Tracker
+# GymBud — Personal Gym Tracker
 
 A single-user, mobile-first gym companion. Log lifts at the gym, see what you did
 last time, get told when to push harder or back off, and never get stuck when a
