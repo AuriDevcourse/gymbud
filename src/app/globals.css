@@ -139,6 +139,15 @@ input[type="number"] {
   appearance: textfield;
 }
 
+/* opt-in: hide the scrollbar but keep scrolling (horizontal chip rows) */
+.no-scrollbar {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
 /* thin custom scrollbar */
 ::-webkit-scrollbar {
   width: 8px;

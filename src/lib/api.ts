@@ -66,7 +66,7 @@ export const profileSchema = z.object({
 });
 
 export const runSchema = z.object({
-  distance: z.number().positive().max(500), // km
+  distance: z.number().min(0).max(500).optional(), // km (optional for intervals)
   duration: z.number().int().positive().max(86_400), // seconds (≤ 24h)
   kind: z.enum(["long", "short", "interval"]).optional(),
   loggedAt: z

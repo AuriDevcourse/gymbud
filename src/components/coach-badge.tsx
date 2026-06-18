@@ -6,17 +6,17 @@ const MAP: Record<
   { label: string; icon: typeof TrendingUp; cls: string }
 > = {
   increase: {
-    label: "Push harder",
+    label: "Add weight",
     icon: TrendingUp,
     cls: "text-push border-push/40 bg-push/10",
   },
   maintain: {
-    label: "Hold steady",
+    label: "Same weight",
     icon: Minus,
     cls: "text-good border-good/40 bg-good/10",
   },
   back_off: {
-    label: "Back off",
+    label: "Drop weight",
     icon: TrendingDown,
     cls: "text-back-off border-back-off/40 bg-back-off/10",
   },

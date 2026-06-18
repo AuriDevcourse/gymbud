@@ -20,10 +20,15 @@ export function RunLogger() {
   const [error, setError] = useState<string | null>(null);
 
   const save = async () => {
-    const distance = parseFloat(km);
+    const distance = parseFloat(km) || 0;
     const minutes = parseFloat(min);
-    if (!distance || distance <= 0 || !minutes || minutes <= 0) {
-      setError("Add a distance and a time.");
+    if (!minutes || minutes <= 0) {
+      setError("Add a time.");
+      return;
+    }
+    // intervals are effort/time based, so distance is optional there
+    if (kind !== "interval" && distance <= 0) {
+      setError("Add a distance.");
       return;
     }
     setBusy(true);
@@ -58,13 +63,13 @@ export function RunLogger() {
             <Footprints size={20} aria-hidden="true" />
           </span>
           <div>
-            <p className="font-semibold">Log a run</p>
-            <p className="text-sm text-muted">Distance and time, counts to your streak</p>
+            <p className="font-semibold">Run</p>
+            <p className="text-sm text-muted">Log a run, counts to your streak</p>
           </div>
         </Card>
       </button>
 
-      <Sheet open={open} onClose={() => setOpen(false)} title="Log a run">
+      <Sheet open={open} onClose={() => setOpen(false)} title="Run">
         <div className="flex flex-col gap-3">
           <div className="flex gap-1.5">
             {KINDS.map((k) => (
@@ -84,7 +89,9 @@ export function RunLogger() {
           </div>
           <div className="flex gap-3">
             <label className="flex-1">
-              <span className="mb-1 block text-xs text-muted">Distance (km)</span>
+              <span className="mb-1 block text-xs text-muted">
+                {kind === "interval" ? "Distance (km, optional)" : "Distance (km)"}
+              </span>
               <input
                 type="number"
                 inputMode="decimal"

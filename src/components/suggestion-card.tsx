@@ -1,8 +1,8 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { Flame, Shuffle } from "lucide-react";
+import { ChevronRight, Flame, Shuffle } from "lucide-react";
 import { Button, Card, Chip, SectionTitle } from "./ui";
 import { StartSuggested } from "./start-suggested";
 import { suggestWorkout, FOCUS_LABELS, type WorkoutFocus } from "@/lib/coach";
@@ -32,6 +32,7 @@ export function SuggestionCard({
   );
 
   const FOCUSES = Object.keys(FOCUS_LABELS) as WorkoutFocus[];
+  const focusRow = useRef<HTMLDivElement>(null);
 
   const shuffle = () => setSeed(Math.floor(Math.random() * 1_000_000) + 1);
 
@@ -55,22 +56,31 @@ export function SuggestionCard({
             Shuffle
           </button>
         </div>
-        {/* pick a focus, or leave on Auto to let the coach choose */}
-        <div className="-mx-1 mb-3 flex gap-1.5 overflow-x-auto px-1">
-          {FOCUSES.map((f) => (
-            <button
-              key={f}
-              onClick={() => setFocus(f)}
-              aria-pressed={focus === f}
-              className={`shrink-0 rounded-full border px-3 py-1.5 text-xs font-medium transition ${
-                focus === f
-                  ? "border-accent bg-accent/10 text-accent"
-                  : "border-border bg-surface-2 text-muted"
-              }`}
-            >
-              {FOCUS_LABELS[f]}
-            </button>
-          ))}
+        {/* pick a focus, or leave on Auto. Scrollbar hidden; arrow pages right. */}
+        <div className="relative mb-3">
+          <div ref={focusRow} className="no-scrollbar flex gap-1.5 overflow-x-auto pr-9">
+            {FOCUSES.map((f) => (
+              <button
+                key={f}
+                onClick={() => setFocus(f)}
+                aria-pressed={focus === f}
+                className={`shrink-0 rounded-full border px-3 py-1.5 text-xs font-medium transition ${
+                  focus === f
+                    ? "border-accent bg-accent/10 text-accent"
+                    : "border-border bg-surface-2 text-muted"
+                }`}
+              >
+                {FOCUS_LABELS[f]}
+              </button>
+            ))}
+          </div>
+          <button
+            onClick={() => focusRow.current?.scrollBy({ left: 160, behavior: "smooth" })}
+            aria-label="More workout types"
+            className="absolute right-0 top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-full border border-border bg-surface text-muted-strong shadow-md shadow-black/30 active:bg-surface-2"
+          >
+            <ChevronRight size={16} aria-hidden="true" />
+          </button>
         </div>
         <p className="mb-3 text-sm text-muted">
           {focus === "auto"

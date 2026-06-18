@@ -12,6 +12,6 @@ export async function POST(req: Request) {
   const body = await readBody(req, runSchema);
   if ("error" in body) return body.error;
   const { distance, duration, kind, loggedAt, note } = body.data;
-  const entry = await addRun(distance, duration, kind ?? "long", loggedAt ?? todayISO(), note ?? null);
+  const entry = await addRun(distance ?? 0, duration, kind ?? "long", loggedAt ?? todayISO(), note ?? null);
   return ok(entry, 201);
 }

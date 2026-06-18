@@ -125,12 +125,20 @@ export function ProgressClient({
                   </span>
                   <div className="min-w-0 flex-1">
                     <p className="font-medium">
-                      <span className="stat-num">{fmtWeight(r.distance)}</span> km ·{" "}
-                      {fmtDuration(r.duration)}
+                      {r.distance > 0 ? (
+                        <>
+                          <span className="stat-num">{fmtWeight(r.distance)}</span> km ·{" "}
+                          {fmtDuration(r.duration)}
+                        </>
+                      ) : (
+                        fmtDuration(r.duration)
+                      )}
                     </p>
                     <p className="text-sm text-muted">
-                      {RUN_KIND_LABELS[r.kind]} · {relativeDay(r.loggedAt)} ·{" "}
-                      {(r.duration / 60 / r.distance).toFixed(1)} min/km
+                      {RUN_KIND_LABELS[r.kind]} · {relativeDay(r.loggedAt)}
+                      {r.distance > 0
+                        ? ` · ${(r.duration / 60 / r.distance).toFixed(1)} min/km`
+                        : ""}
                     </p>
                   </div>
                 </Card>
