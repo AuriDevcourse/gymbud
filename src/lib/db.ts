@@ -34,6 +34,7 @@ const SCHEMA = `
     id         INTEGER PRIMARY KEY AUTOINCREMENT,
     distance   REAL NOT NULL,            -- kilometres
     duration   INTEGER NOT NULL,         -- seconds
+    kind       TEXT NOT NULL DEFAULT 'long', -- long | short | interval
     logged_at  TEXT NOT NULL,            -- YYYY-MM-DD
     note       TEXT,
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
@@ -98,6 +99,7 @@ async function migrate(c: Client): Promise<void> {
     "ALTER TABLE profile ADD COLUMN onboarded INTEGER NOT NULL DEFAULT 0",
     "ALTER TABLE profile ADD COLUMN name TEXT NOT NULL DEFAULT ''",
     "ALTER TABLE set_log ADD COLUMN type TEXT NOT NULL DEFAULT 'normal'",
+    "ALTER TABLE run ADD COLUMN kind TEXT NOT NULL DEFAULT 'long'",
   ]) {
     try {
       await c.execute(sql);

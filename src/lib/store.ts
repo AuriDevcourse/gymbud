@@ -98,13 +98,14 @@ export async function addBodyWeight(weight: number, loggedAt: string): Promise<B
 // ── Runs ──────────────────────────────────────────────────────────────────
 export async function listRuns(limit = 60): Promise<Run[]> {
   const rows = await all(
-    "SELECT id, distance, duration, logged_at, note FROM run ORDER BY logged_at DESC, id DESC LIMIT ?",
+    "SELECT id, distance, duration, kind, logged_at, note FROM run ORDER BY logged_at DESC, id DESC LIMIT ?",
     [limit],
   );
   return rows.map((r) => ({
     id: num(r.id),
     distance: num(r.distance),
     duration: num(r.duration),
+    kind: str(r.kind) as Run["kind"],
     loggedAt: str(r.logged_at),
     note: r.note === null ? null : str(r.note),
   }));
@@ -113,14 +114,15 @@ export async function listRuns(limit = 60): Promise<Run[]> {
 export async function addRun(
   distance: number,
   duration: number,
+  kind: Run["kind"],
   loggedAt: string,
   note: string | null,
 ): Promise<Run> {
   const { lastId } = await run(
-    "INSERT INTO run (distance, duration, logged_at, note) VALUES (?, ?, ?, ?)",
-    [distance, duration, loggedAt, note],
+    "INSERT INTO run (distance, duration, kind, logged_at, note) VALUES (?, ?, ?, ?, ?)",
+    [distance, duration, kind, loggedAt, note],
   );
-  return { id: lastId, distance, duration, loggedAt, note };
+  return { id: lastId, distance, duration, kind, loggedAt, note };
 }
 
 export async function deleteRun(id: number): Promise<void> {

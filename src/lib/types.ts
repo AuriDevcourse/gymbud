@@ -19,10 +19,19 @@ export interface BodyWeightEntry {
   loggedAt: string; // YYYY-MM-DD
 }
 
+export type RunKind = "long" | "short" | "interval";
+
+export const RUN_KIND_LABELS: Record<RunKind, string> = {
+  long: "Long run",
+  short: "Short run",
+  interval: "Interval",
+};
+
 export interface Run {
   id: number;
   distance: number; // kilometres
   duration: number; // seconds
+  kind: RunKind;
   loggedAt: string; // YYYY-MM-DD
   note: string | null;
 }

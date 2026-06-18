@@ -6,13 +6,16 @@ import { Footprints, Loader2 } from "lucide-react";
 import { Button, Card } from "./ui";
 import { Sheet } from "./sheet";
 import { api } from "@/lib/format";
-import type { Run } from "@/lib/types";
+import { RUN_KIND_LABELS, type Run, type RunKind } from "@/lib/types";
+
+const KINDS = Object.keys(RUN_KIND_LABELS) as RunKind[];
 
 export function RunLogger() {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [km, setKm] = useState("");
   const [min, setMin] = useState("");
+  const [kind, setKind] = useState<RunKind>("long");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -28,11 +31,12 @@ export function RunLogger() {
     try {
       await api<Run>("/api/runs", {
         method: "POST",
-        body: JSON.stringify({ distance, duration: Math.round(minutes * 60) }),
+        body: JSON.stringify({ distance, duration: Math.round(minutes * 60), kind }),
       });
       setOpen(false);
       setKm("");
       setMin("");
+      setKind("long");
       router.refresh(); // refresh streak + stats on the home screen
     } catch (e) {
       setError((e as Error).message);
@@ -62,6 +66,22 @@ export function RunLogger() {
 
       <Sheet open={open} onClose={() => setOpen(false)} title="Log a run">
         <div className="flex flex-col gap-3">
+          <div className="flex gap-1.5">
+            {KINDS.map((k) => (
+              <button
+                key={k}
+                onClick={() => setKind(k)}
+                aria-pressed={kind === k}
+                className={`flex-1 rounded-full border px-2 py-2 text-xs font-medium transition ${
+                  kind === k
+                    ? "border-accent bg-accent/10 text-accent"
+                    : "border-border bg-surface-2 text-muted"
+                }`}
+              >
+                {RUN_KIND_LABELS[k]}
+              </button>
+            ))}
+          </div>
           <div className="flex gap-3">
             <label className="flex-1">
               <span className="mb-1 block text-xs text-muted">Distance (km)</span>

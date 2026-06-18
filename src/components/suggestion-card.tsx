@@ -5,7 +5,7 @@ import Link from "next/link";
 import { Flame, Shuffle } from "lucide-react";
 import { Button, Card, Chip, SectionTitle } from "./ui";
 import { StartSuggested } from "./start-suggested";
-import { suggestWorkout } from "@/lib/coach";
+import { suggestWorkout, FOCUS_LABELS, type WorkoutFocus } from "@/lib/coach";
 import type { Equipment, MuscleGroup } from "@/lib/exercise-library";
 import { EQUIPMENT_LABELS, GOAL_LABELS, MUSCLE_LABELS, type Goal } from "@/lib/types";
 
@@ -24,11 +24,14 @@ export function SuggestionCard({
 }) {
   // seed 0 = the canonical suggestion; shuffling rolls a fresh variation
   const [seed, setSeed] = useState(0);
+  const [focus, setFocus] = useState<WorkoutFocus>("auto");
 
   const suggestion = useMemo(
-    () => suggestWorkout({ goal, daysPerWeek, available, daysSince, seed }),
-    [goal, daysPerWeek, available, daysSince, seed],
+    () => suggestWorkout({ goal, daysPerWeek, available, daysSince, seed, focus }),
+    [goal, daysPerWeek, available, daysSince, seed, focus],
   );
+
+  const FOCUSES = Object.keys(FOCUS_LABELS) as WorkoutFocus[];
 
   const shuffle = () => setSeed(Math.floor(Math.random() * 1_000_000) + 1);
 
@@ -52,9 +55,29 @@ export function SuggestionCard({
             Shuffle
           </button>
         </div>
+        {/* pick a focus, or leave on Auto to let the coach choose */}
+        <div className="-mx-1 mb-3 flex gap-1.5 overflow-x-auto px-1">
+          {FOCUSES.map((f) => (
+            <button
+              key={f}
+              onClick={() => setFocus(f)}
+              aria-pressed={focus === f}
+              className={`shrink-0 rounded-full border px-3 py-1.5 text-xs font-medium transition ${
+                focus === f
+                  ? "border-accent bg-accent/10 text-accent"
+                  : "border-border bg-surface-2 text-muted"
+              }`}
+            >
+              {FOCUS_LABELS[f]}
+            </button>
+          ))}
+        </div>
         <p className="mb-3 text-sm text-muted">
-          Picked for your {GOAL_LABELS[goal].toLowerCase()} goal, {daysPerWeek}{" "}
-          {daysPerWeek === 1 ? "day" : "days"} a week. Shuffle for a different mix.
+          {focus === "auto"
+            ? `Picked for your ${GOAL_LABELS[goal].toLowerCase()} goal, ${daysPerWeek} ${
+                daysPerWeek === 1 ? "day" : "days"
+              } a week. Shuffle for a different mix.`
+            : "Shuffle for a different mix of exercises."}
         </p>
         <div className="mb-4 flex flex-wrap gap-1.5">
           {suggestion.focus.slice(0, 6).map((m) => (

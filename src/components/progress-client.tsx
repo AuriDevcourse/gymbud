@@ -20,7 +20,7 @@ import { weightTrend } from "@/lib/bodyweight";
 import { dayLabel, parseDbDate, relativeDay } from "@/lib/date";
 import type { ExercisePoint, SessionSummary } from "@/lib/store";
 import type { Exercise } from "@/lib/exercise-library";
-import type { BodyWeightEntry, Goal, Run, Unit } from "@/lib/types";
+import { RUN_KIND_LABELS, type BodyWeightEntry, type Goal, type Run, type Unit } from "@/lib/types";
 
 export function ProgressClient({
   exercises,
@@ -129,7 +129,8 @@ export function ProgressClient({
                       {fmtDuration(r.duration)}
                     </p>
                     <p className="text-sm text-muted">
-                      {relativeDay(r.loggedAt)} · {(r.duration / 60 / r.distance).toFixed(1)} min/km
+                      {RUN_KIND_LABELS[r.kind]} · {relativeDay(r.loggedAt)} ·{" "}
+                      {(r.duration / 60 / r.distance).toFixed(1)} min/km
                     </p>
                   </div>
                 </Card>

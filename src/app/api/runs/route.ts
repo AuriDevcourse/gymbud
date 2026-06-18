@@ -11,7 +11,7 @@ export async function GET() {
 export async function POST(req: Request) {
   const body = await readBody(req, runSchema);
   if ("error" in body) return body.error;
-  const { distance, duration, loggedAt, note } = body.data;
-  const entry = await addRun(distance, duration, loggedAt ?? todayISO(), note ?? null);
+  const { distance, duration, kind, loggedAt, note } = body.data;
+  const entry = await addRun(distance, duration, kind ?? "long", loggedAt ?? todayISO(), note ?? null);
   return ok(entry, 201);
 }

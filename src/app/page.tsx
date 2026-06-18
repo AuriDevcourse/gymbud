@@ -4,7 +4,6 @@ import { ChevronRight, Dumbbell, Flame, Scale, TrendingUp } from "lucide-react";
 import { Card } from "@/components/ui";
 import { SuggestionCard } from "@/components/suggestion-card";
 import { RunLogger } from "@/components/run-logger";
-import { WeightDelta } from "@/components/weight-delta";
 import {
   activeSession,
   daysSinceByMuscle,
@@ -15,7 +14,7 @@ import {
 } from "@/lib/store";
 import { weightTrend } from "@/lib/bodyweight";
 import { fmtWeight } from "@/lib/format";
-import { relativeDay } from "@/lib/date";
+import { parseDbDate } from "@/lib/date";
 
 export const dynamic = "force-dynamic";
 
@@ -62,68 +61,29 @@ export default async function Home() {
         </Link>
       )}
 
-      {/* Quick "about me" stats — minimal, tap a card for the full picture */}
-      <section className="grid grid-cols-2 gap-3">
-        <Card className="h-full">
-          <StatLabel icon={<Flame size={16} aria-hidden="true" />}>Streak</StatLabel>
-          <p className="stat-num text-2xl font-bold">
-            {stats.streak}
-            <span className="ml-1 text-base font-medium text-muted">
-              {stats.streak === 1 ? "day" : "days"}
-            </span>
-          </p>
-          <p className="text-sm text-muted">
-            {stats.streak > 0 ? "Keep it going" : "Train today to start"}
-          </p>
+      {/* Quick stats — icons only, tap for the full picture */}
+      <Link href="/progress" className="block">
+        <Card className="flex items-center justify-between px-3 py-3">
+          <Stat icon={<Flame size={18} aria-hidden="true" />} value={String(stats.streak)} accent />
+          <Divider />
+          <Stat
+            icon={<Dumbbell size={18} aria-hidden="true" />}
+            value={String(stats.thisWeekSets)}
+          />
+          <Divider />
+          <Stat
+            icon={<Scale size={18} aria-hidden="true" />}
+            value={
+              bwTrend.current ? `${fmtWeight(bwTrend.current.weight)}${profile.unit}` : "–"
+            }
+          />
+          <Divider />
+          <Stat
+            icon={<TrendingUp size={18} aria-hidden="true" />}
+            value={lastDone ? shortAgo(lastDone.startedAt) : "–"}
+          />
         </Card>
-
-        <Card className="h-full">
-          <StatLabel icon={<Dumbbell size={16} aria-hidden="true" />}>This week</StatLabel>
-          <p className="stat-num text-2xl font-bold">
-            {stats.thisWeekSets}
-            <span className="ml-1 text-base font-medium text-muted">sets</span>
-          </p>
-          <p className="text-sm text-muted">{stats.totalWorkouts} workouts total</p>
-        </Card>
-
-        <Link href="/progress" className="block">
-          <Card className="h-full">
-            <StatLabel icon={<Scale size={16} aria-hidden="true" />}>Body weight</StatLabel>
-            {bwTrend.current ? (
-              <>
-                <p className="stat-num text-2xl font-bold">
-                  {fmtWeight(bwTrend.current.weight)}
-                  <span className="ml-1 text-base text-muted">{profile.unit}</span>
-                </p>
-                {bwTrend.delta !== null ? (
-                  <WeightDelta delta={bwTrend.delta} unit={profile.unit} goal={profile.goal} />
-                ) : (
-                  <p className="text-sm text-muted">{relativeDay(bwTrend.current.loggedAt)}</p>
-                )}
-              </>
-            ) : (
-              <p className="text-sm text-muted">Tap to log</p>
-            )}
-          </Card>
-        </Link>
-
-        <Link href="/progress" className="block">
-          <Card className="h-full">
-            <StatLabel icon={<TrendingUp size={16} aria-hidden="true" />}>Last session</StatLabel>
-            {lastDone ? (
-              <>
-                <p className="stat-num text-2xl font-bold">
-                  {lastDone.setCount}
-                  <span className="ml-1 text-base font-medium text-muted">sets</span>
-                </p>
-                <p className="text-sm text-muted">{relativeDay(lastDone.startedAt)}</p>
-              </>
-            ) : (
-              <p className="text-sm text-muted">No sessions yet</p>
-            )}
-          </Card>
-        </Link>
-      </section>
+      </Link>
 
       {/* Suggested workout (client: supports Shuffle for variety) */}
       <SuggestionCard
@@ -150,11 +110,29 @@ export default async function Home() {
   );
 }
 
-function StatLabel({ icon, children }: { icon: React.ReactNode; children: React.ReactNode }) {
+function shortAgo(s: string): string {
+  const days = Math.floor((Date.now() - parseDbDate(s).getTime()) / 86_400_000);
+  if (days <= 0) return "today";
+  return `${days}d`;
+}
+
+function Stat({
+  icon,
+  value,
+  accent,
+}: {
+  icon: React.ReactNode;
+  value: string;
+  accent?: boolean;
+}) {
   return (
-    <div className="mb-2 flex items-center gap-1.5 text-muted">
-      {icon}
-      <span className="text-xs font-medium uppercase tracking-wider">{children}</span>
+    <div className="flex flex-1 flex-col items-center gap-1">
+      <span className={accent ? "text-accent" : "text-muted"}>{icon}</span>
+      <span className="stat-num text-lg font-bold leading-none">{value}</span>
     </div>
   );
+}
+
+function Divider() {
+  return <span className="h-8 w-px shrink-0 bg-border" aria-hidden="true" />;
 }

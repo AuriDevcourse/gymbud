@@ -148,6 +148,44 @@ export interface Suggestion {
   exercises: Exercise[];
 }
 
+// User-pickable workout focus. "auto" = let the coach decide from frequency.
+export type WorkoutFocus =
+  | "auto"
+  | "full_body"
+  | "upper"
+  | "lower"
+  | "push"
+  | "pull"
+  | "legs";
+
+export const FOCUS_LABELS: Record<WorkoutFocus, string> = {
+  auto: "Auto",
+  full_body: "Full Body",
+  upper: "Upper",
+  lower: "Lower",
+  push: "Push",
+  pull: "Pull",
+  legs: "Legs",
+};
+
+const FOCUS_MUSCLES: Record<Exclude<WorkoutFocus, "auto">, MuscleGroup[]> = {
+  full_body: ["quads", "back", "chest", "shoulders", "hamstrings", "core"],
+  upper: ["back", "chest", "shoulders", "biceps", "triceps"],
+  lower: ["quads", "hamstrings", "glutes", "calves"],
+  push: ["chest", "shoulders", "triceps"],
+  pull: ["back", "biceps", "forearms"],
+  legs: ["quads", "hamstrings", "glutes", "calves"],
+};
+
+const FOCUS_TITLE: Record<Exclude<WorkoutFocus, "auto">, string> = {
+  full_body: "Full Body",
+  upper: "Upper Body",
+  lower: "Lower Body",
+  push: "Push",
+  pull: "Pull",
+  legs: "Legs",
+};
+
 /**
  * Suggest today's session from the goal, weekly frequency and which muscles
  * were trained recently. Stale muscles get priority; compounds come first.
@@ -158,6 +196,7 @@ export function suggestWorkout(opts: {
   available?: Equipment[];
   daysSince: Partial<Record<MuscleGroup, number>>; // days since each muscle trained
   seed?: number; // 0 = canonical pick; any other value = a randomized variation
+  focus?: WorkoutFocus; // explicit user choice; "auto"/undefined = decide below
 }): Suggestion {
   const available = opts.available ?? [];
   const staleness = (m: MuscleGroup) => opts.daysSince[m] ?? 999;
@@ -167,7 +206,10 @@ export function suggestWorkout(opts: {
   let title: string;
   let focus: MuscleGroup[];
 
-  if (opts.daysPerWeek <= 3) {
+  if (opts.focus && opts.focus !== "auto") {
+    title = FOCUS_TITLE[opts.focus];
+    focus = [...FOCUS_MUSCLES[opts.focus]];
+  } else if (opts.daysPerWeek <= 3) {
     // Full-body: one compound from each region + accessories for the stalest.
     title = "Full Body";
     focus = ["quads", "back", "chest", "shoulders", "hamstrings", "core"];

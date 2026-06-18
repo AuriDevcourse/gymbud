@@ -484,23 +484,20 @@ export function WorkoutClient() {
 
   return (
     <div className="pb-4">
-      <div className="mb-4 flex items-center justify-between">
+      <div className="mb-4 flex items-start justify-between gap-2">
         <div>
           <h1 className="display text-2xl font-bold leading-tight">Workout</h1>
-          <p className="mt-0.5 flex items-center gap-1.5 text-sm text-muted">
-            {exercises.length > 0 && (
-              <>
-                <span>{sessionTitle(exercises)}</span>
-                <span aria-hidden="true">·</span>
-              </>
-            )}
-            <ElapsedTimer startedAt={session.startedAt} />
-          </p>
+          {exercises.length > 0 && (
+            <p className="mt-0.5 text-sm text-muted">{sessionTitle(exercises)}</p>
+          )}
         </div>
-        <Button variant="surface" size="sm" onClick={() => setPhase("cooldown")} disabled={busy}>
-          {busy ? <Loader2 size={15} className="animate-spin" /> : <Flag size={15} />}
-          Finish
-        </Button>
+        <div className="flex shrink-0 items-center gap-2 text-muted">
+          <ElapsedTimer startedAt={session.startedAt} />
+          <Button variant="surface" size="sm" onClick={() => setPhase("cooldown")} disabled={busy}>
+            {busy ? <Loader2 size={15} className="animate-spin" /> : <Flag size={15} />}
+            Finish
+          </Button>
+        </div>
       </div>
 
       {error && (
