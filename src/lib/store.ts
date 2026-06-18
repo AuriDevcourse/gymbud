@@ -376,20 +376,6 @@ export async function addSet(
   return { id: lastId, sessionExerciseId, setIndex, weight, reps, type };
 }
 
-export async function updateSet(
-  setId: number,
-  weight: number,
-  reps: number,
-  type: SetLog["type"] = "normal",
-): Promise<void> {
-  await run("UPDATE set_log SET weight = ?, reps = ?, type = ? WHERE id = ?", [
-    weight,
-    reps,
-    type,
-    setId,
-  ]);
-}
-
 export async function deleteSet(setId: number): Promise<void> {
   await run("DELETE FROM set_log WHERE id = ?", [setId]);
 }
