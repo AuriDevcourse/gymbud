@@ -2,7 +2,6 @@
 
 import { useEffect, useRef, useState } from "react";
 import { ArrowUp, Loader2, Sparkles, Square } from "lucide-react";
-import { api } from "@/lib/format";
 
 type Msg = { role: "user" | "assistant"; text: string; error?: boolean };
 

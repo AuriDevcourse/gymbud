@@ -9,7 +9,6 @@ import {
   Flag,
   Flame,
   Loader2,
-  Pencil,
   Plus,
   Snowflake,
   Timer,
@@ -28,6 +27,7 @@ import { peek, poke, useApi } from "@/lib/swr";
 import { parseDbDate } from "@/lib/date";
 import { getAlternatives } from "@/lib/coach";
 import { EXERCISES_BY_ID, type Equipment, type Exercise } from "@/lib/exercise-library";
+import { EQUIPMENT_LABELS } from "@/lib/types";
 import type {
   Goal,
   Recommendation,
@@ -106,7 +106,7 @@ export function WorkoutClient() {
 
   // bottom-bar "Next set" fires the current exercise card's add-set commit
   const commitRef = useRef<(() => void) | null>(null);
-  const [editingSet, setEditingSet] = useState(false);
+  const [swapOpen, setSwapOpen] = useState(false);
 
   // workout phases: warm up → working sets → cool down
   const [phase, setPhase] = useState<"warmup" | "main" | "cooldown">("main");
@@ -276,10 +276,14 @@ export function WorkoutClient() {
     }
   };
 
+  // Dice: jump to a random different same-muscle exercise.
   const cycleSwap = (se: SessionExercise) => {
-    const alts = getAlternatives(se.exerciseId, { available }).map((e) => e.id);
-    const pick = alts.find((id) => id !== se.exerciseId) ?? alts[0];
-    if (pick) swapTo(se, pick, se.exerciseId);
+    const alts = getAlternatives(se.exerciseId, { available })
+      .map((e) => e.id)
+      .filter((id) => id !== se.exerciseId);
+    if (!alts.length) return;
+    const pick = alts[Math.floor(Math.random() * alts.length)];
+    swapTo(se, pick, se.exerciseId);
   };
 
   // ── optimistic set mutations ──
@@ -322,42 +326,6 @@ export function WorkoutClient() {
           e.id === se.id ? { ...e, sets: e.sets.filter((x) => x.id !== id) } : e,
         ),
       }));
-      setError((e as Error).message);
-    }
-  };
-
-  const updateSet = async (
-    se: SessionExercise,
-    setId: number,
-    weight: number,
-    reps: number,
-    type: SetType,
-  ) => {
-    const prev = se.sets.find((x) => x.id === setId);
-    patch((s) => ({
-      ...s,
-      exercises: s.exercises.map((e) =>
-        e.id === se.id
-          ? { ...e, sets: e.sets.map((x) => (x.id === setId ? { ...x, weight, reps, type } : x)) }
-          : e,
-      ),
-    }));
-    try {
-      await api(`/api/sets/${setId}`, {
-        method: "PATCH",
-        body: JSON.stringify({ weight, reps, type }),
-      });
-    } catch (e) {
-      if (prev) {
-        patch((s) => ({
-          ...s,
-          exercises: s.exercises.map((el) =>
-            el.id === se.id
-              ? { ...el, sets: el.sets.map((x) => (x.id === setId ? prev : x)) }
-              : el,
-          ),
-        }));
-      }
       setError((e as Error).message);
     }
   };
@@ -554,11 +522,10 @@ export function WorkoutClient() {
                 targetSets={target}
                 commitRef={commitRef}
                 onAddSet={(w, r, t) => addSet(se, w, r, t)}
-                onUpdateSet={(id, w, r, t) => updateSet(se, id, w, r, t)}
                 onDeleteSet={(id) => deleteSet(se, id)}
-                onSwap={() => cycleSwap(se)}
+                onSwap={() => setSwapOpen(true)}
+                onRandomize={() => cycleSwap(se)}
                 onRemove={() => removeExercise(se)}
-                onEditingChange={setEditingSet}
               />
             </div>
 
@@ -574,12 +541,7 @@ export function WorkoutClient() {
                 <ChevronLeft size={18} aria-hidden="true" />
               </Button>
 
-              {editingSet ? (
-                <div className="flex flex-1 items-center justify-center gap-2 rounded-[var(--radius-md)] border border-dashed border-border text-sm text-muted">
-                  <Pencil size={15} aria-hidden="true" />
-                  Finish editing the set above
-                </div>
-              ) : !setsComplete ? (
+              {!setsComplete ? (
                 <Button
                   variant="accent"
                   size="lg"
@@ -612,22 +574,6 @@ export function WorkoutClient() {
               )}
             </div>
 
-            {/* once the target is met, allow extra sets without forcing them */}
-            {setsComplete && !editingSet && (
-              <Button
-                variant="ghost"
-                className="mt-2 w-full"
-                onClick={() => commitRef.current?.()}
-              >
-                <Plus size={16} aria-hidden="true" />
-                Add another set
-              </Button>
-            )}
-
-            <Button variant="ghost" className="mt-2 w-full" onClick={() => setPickerOpen(true)}>
-              <Plus size={16} aria-hidden="true" />
-              Add exercise
-            </Button>
           </>
         )
       )}
@@ -659,6 +605,26 @@ export function WorkoutClient() {
       )}
 
       <ExercisePicker open={pickerOpen} onClose={() => setPickerOpen(false)} onPick={addExercise} />
+
+      <Sheet open={swapOpen && !!se} onClose={() => setSwapOpen(false)} title="Choose exercise">
+        <ul className="flex flex-col gap-1.5">
+          {se &&
+            getAlternatives(se.exerciseId, { available }).map((alt) => (
+              <li key={alt.id}>
+                <button
+                  onClick={() => {
+                    swapTo(se, alt.id, se.exerciseId);
+                    setSwapOpen(false);
+                  }}
+                  className="flex w-full items-center justify-between gap-2 rounded-[var(--radius-md)] border border-border bg-surface-2 px-3 py-3 text-left active:bg-surface-3"
+                >
+                  <span className="font-medium">{alt.name}</span>
+                  <span className="text-xs text-muted">{EQUIPMENT_LABELS[alt.equipment]}</span>
+                </button>
+              </li>
+            ))}
+        </ul>
+      </Sheet>
 
       <Sheet open={finishOpen} onClose={closeSummary} title="Session done">
         <FinishSummary summary={summary} onNote={saveNote} />
@@ -777,8 +743,9 @@ function RestBar({ target, onClose }: { target: number; onClose: () => void }) {
             </button>
             <button
               onClick={() => {
-                setLeft((l) => l + 15);
-                setCap((c) => c + 15);
+                const nl = left + 15;
+                setLeft(nl);
+                setCap((c) => Math.max(c, nl)); // grow the bar's full mark
               }}
               className="rounded-md border border-border bg-surface-2 px-2 py-1 text-xs"
             >
@@ -889,17 +856,16 @@ function PhaseTimer({ seconds }: { seconds: number }) {
   const [running, setRunning] = useState(false);
 
   useEffect(() => {
-    if (!running) return;
+    if (!running || left === 0) return;
     const t = setInterval(() => setLeft((l) => Math.max(0, l - 1)), 1000);
     return () => clearInterval(t);
-  }, [running]);
+  }, [running, left]);
 
   useEffect(() => {
-    if (left === 0 && running) {
-      setRunning(false);
-      if (typeof navigator !== "undefined" && navigator.vibrate) navigator.vibrate(180);
+    if (left === 0 && typeof navigator !== "undefined" && navigator.vibrate) {
+      navigator.vibrate(180);
     }
-  }, [left, running]);
+  }, [left]);
 
   const done = left === 0;
 
