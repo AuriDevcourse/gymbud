@@ -177,6 +177,10 @@ input[type="number"] {
   .animate-fade {
     animation: fade-in 0.2s ease;
   }
+  /* slower, larger slide for a bigger change (advancing to the next exercise) */
+  .animate-exercise-in {
+    animation: exercise-in 0.45s cubic-bezier(0.16, 1, 0.3, 1);
+  }
   .animate-pop {
     animation: pop 0.32s cubic-bezier(0.34, 1.56, 0.64, 1);
   }
@@ -209,6 +213,16 @@ input[type="number"] {
   }
   to {
     opacity: 1;
+  }
+}
+@keyframes exercise-in {
+  from {
+    opacity: 0;
+    transform: translateX(40px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
   }
 }
 @keyframes pop {

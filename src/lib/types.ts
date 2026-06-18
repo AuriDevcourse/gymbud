@@ -4,6 +4,7 @@ export type Goal = "muscle_gain" | "fat_loss" | "strength" | "general";
 export type Unit = "kg" | "lb";
 
 export interface Profile {
+  name: string; // optional display name for the greeting ("" = none)
   goal: Goal;
   daysPerWeek: number;
   equipment: Equipment[]; // equipment the user has access to ([] = assume all)
@@ -16,6 +17,20 @@ export interface BodyWeightEntry {
   id: number;
   weight: number;
   loggedAt: string; // YYYY-MM-DD
+}
+
+export interface Run {
+  id: number;
+  distance: number; // kilometres
+  duration: number; // seconds
+  loggedAt: string; // YYYY-MM-DD
+  note: string | null;
+}
+
+export interface WorkoutStats {
+  streak: number; // consecutive days with a workout or run, ending today/yesterday
+  thisWeekSets: number; // sets logged in the last 7 days
+  totalWorkouts: number; // finished sessions all-time
 }
 
 export type SetType = "normal" | "warmup" | "drop" | "failure";

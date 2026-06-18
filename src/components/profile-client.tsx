@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Check, Loader2, Lock, Scale } from "lucide-react";
+import { Check, Flame, Loader2, Lock, Scale } from "lucide-react";
 import { Button, Card, SectionTitle } from "./ui";
 import { WeightDelta } from "./weight-delta";
 import { api, fmtWeight } from "@/lib/format";
@@ -18,6 +18,7 @@ import {
   type Goal,
   type Profile,
   type Unit,
+  type WorkoutStats,
 } from "@/lib/types";
 
 const GOALS = Object.keys(GOAL_LABELS) as Goal[];
@@ -27,6 +28,8 @@ export function ProfileClient() {
   const router = useRouter();
   const [p, setP] = useState<Profile | null>(() => peek<Profile>("/api/profile") ?? null);
   const [weights, setWeights] = useState<BodyWeightEntry[]>([]);
+  const [stats, setStats] = useState<WorkoutStats | null>(null);
+  const [name, setName] = useState("");
   const [bw, setBw] = useState("");
   const [authOn, setAuthOn] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -38,12 +41,15 @@ export function ProfileClient() {
       api<Profile>("/api/profile"),
       api<BodyWeightEntry[]>("/api/bodyweight"),
       api<{ auth: boolean }>("/api/health").catch(() => ({ auth: false })),
+      api<WorkoutStats>("/api/stats").catch(() => null),
     ])
-      .then(([prof, w, health]) => {
+      .then(([prof, w, health, st]) => {
         setP(prof);
         poke("/api/profile", prof);
+        setName(prof.name);
         setWeights(w);
         setAuthOn(Boolean(health.auth));
+        setStats(st);
         if (w.length) setBw(String(w[w.length - 1].weight));
       })
       .catch((e) => setError(e.message));
@@ -67,6 +73,7 @@ export function ProfileClient() {
       const saved = await api<Profile>("/api/profile", {
         method: "PUT",
         body: JSON.stringify({
+          name: next.name,
           goal: next.goal,
           daysPerWeek: next.daysPerWeek,
           equipment: next.equipment,
@@ -125,6 +132,42 @@ export function ProfileClient() {
       </div>
 
       {error && <p className="text-sm text-danger">{error}</p>}
+
+      {/* Streak — your identity as someone who trains */}
+      {stats && (
+        <Card className="flex items-center gap-3 border-accent/30 bg-accent/10">
+          <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-accent/20 text-accent">
+            <Flame size={24} aria-hidden="true" />
+          </span>
+          <div>
+            <p className="stat-num text-3xl font-bold leading-none text-accent">
+              {stats.streak}
+              <span className="ml-1.5 text-base font-medium text-muted-strong">
+                day{stats.streak === 1 ? "" : "s"} streak
+              </span>
+            </p>
+            <p className="mt-1 text-sm text-muted">
+              {stats.totalWorkouts} workouts · {stats.thisWeekSets} sets this week
+            </p>
+          </div>
+        </Card>
+      )}
+
+      {/* Name */}
+      <section>
+        <SectionTitle>Your name</SectionTitle>
+        <input
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          onBlur={() => {
+            if (p && name.trim() !== p.name) save({ ...p, name: name.trim() });
+          }}
+          maxLength={40}
+          placeholder="Add your name"
+          aria-label="Your name"
+          className="h-12 w-full rounded-[var(--radius-md)] border border-border bg-background px-3 text-foreground outline-none focus:border-accent"
+        />
+      </section>
 
       {/* Body weight */}
       <section>

@@ -10,28 +10,30 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import { Trash2, TrendingUp } from "lucide-react";
+import { Footprints, Trash2, TrendingUp } from "lucide-react";
 import { Card, EmptyState, SectionTitle } from "./ui";
 import { WeightDelta } from "./weight-delta";
 import { Skeleton } from "./skeleton";
 import { useApi } from "@/lib/swr";
-import { api, fmtWeight } from "@/lib/format";
+import { api, fmtDuration, fmtWeight } from "@/lib/format";
 import { weightTrend } from "@/lib/bodyweight";
 import { dayLabel, parseDbDate, relativeDay } from "@/lib/date";
 import type { ExercisePoint, SessionSummary } from "@/lib/store";
 import type { Exercise } from "@/lib/exercise-library";
-import type { BodyWeightEntry, Goal, Unit } from "@/lib/types";
+import type { BodyWeightEntry, Goal, Run, Unit } from "@/lib/types";
 
 export function ProgressClient({
   exercises,
   bodyweight,
   sessions,
+  runs,
   unit,
   goal,
 }: {
   exercises: { id: string; name: string }[];
   bodyweight: BodyWeightEntry[];
   sessions: SessionSummary[];
+  runs: Run[];
   unit: Unit;
   goal: Goal;
 }) {
@@ -109,6 +111,33 @@ export function ProgressClient({
           )}
         </Card>
       </section>
+
+      {/* Runs */}
+      {runs.length > 0 && (
+        <section>
+          <SectionTitle>Runs</SectionTitle>
+          <ul className="flex flex-col gap-2">
+            {runs.map((r) => (
+              <li key={r.id}>
+                <Card className="flex items-center gap-3 p-3">
+                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-accent/15 text-accent">
+                    <Footprints size={16} aria-hidden="true" />
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <p className="font-medium">
+                      <span className="stat-num">{fmtWeight(r.distance)}</span> km ·{" "}
+                      {fmtDuration(r.duration)}
+                    </p>
+                    <p className="text-sm text-muted">
+                      {relativeDay(r.loggedAt)} · {(r.duration / 60 / r.distance).toFixed(1)} min/km
+                    </p>
+                  </div>
+                </Card>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
 
       {/* Exercise strength */}
       <section>

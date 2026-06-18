@@ -5,9 +5,11 @@ import { EXERCISES_BY_ID, type MuscleGroup } from "./exercise-library";
 import type {
   BodyWeightEntry,
   Profile,
+  Run,
   Session,
   SessionExercise,
   SetLog,
+  WorkoutStats,
 } from "./types";
 
 // thin helpers over the libSQL client
@@ -32,6 +34,7 @@ const str = (v: unknown) => String(v);
 export async function getProfile(): Promise<Profile> {
   const row = (await one("SELECT * FROM profile WHERE id = 1"))!;
   return {
+    name: row.name === null || row.name === undefined ? "" : str(row.name),
     goal: str(row.goal) as Profile["goal"],
     daysPerWeek: num(row.days_per_week),
     equipment: safeJson(str(row.equipment)),
@@ -45,9 +48,16 @@ export async function updateProfile(p: Partial<Profile>): Promise<Profile> {
   const cur = await getProfile();
   const next = { ...cur, ...p };
   await run(
-    `UPDATE profile SET goal = ?, days_per_week = ?, equipment = ?, unit = ?,
+    `UPDATE profile SET name = ?, goal = ?, days_per_week = ?, equipment = ?, unit = ?,
      onboarded = ?, updated_at = datetime('now') WHERE id = 1`,
-    [next.goal, next.daysPerWeek, JSON.stringify(next.equipment), next.unit, next.onboarded ? 1 : 0],
+    [
+      next.name,
+      next.goal,
+      next.daysPerWeek,
+      JSON.stringify(next.equipment),
+      next.unit,
+      next.onboarded ? 1 : 0,
+    ],
   );
   return getProfile();
 }
@@ -83,6 +93,87 @@ export async function addBodyWeight(weight: number, loggedAt: string): Promise<B
     [weight, loggedAt],
   );
   return { id: lastId, weight, loggedAt };
+}
+
+// ── Runs ──────────────────────────────────────────────────────────────────
+export async function listRuns(limit = 60): Promise<Run[]> {
+  const rows = await all(
+    "SELECT id, distance, duration, logged_at, note FROM run ORDER BY logged_at DESC, id DESC LIMIT ?",
+    [limit],
+  );
+  return rows.map((r) => ({
+    id: num(r.id),
+    distance: num(r.distance),
+    duration: num(r.duration),
+    loggedAt: str(r.logged_at),
+    note: r.note === null ? null : str(r.note),
+  }));
+}
+
+export async function addRun(
+  distance: number,
+  duration: number,
+  loggedAt: string,
+  note: string | null,
+): Promise<Run> {
+  const { lastId } = await run(
+    "INSERT INTO run (distance, duration, logged_at, note) VALUES (?, ?, ?, ?)",
+    [distance, duration, loggedAt, note],
+  );
+  return { id: lastId, distance, duration, loggedAt, note };
+}
+
+export async function deleteRun(id: number): Promise<void> {
+  await run("DELETE FROM run WHERE id = ?", [id]);
+}
+
+// ── Stats (streak + week volume) ──────────────────────────────────────────
+function localDayKey(d: Date): string {
+  const off = d.getTimezoneOffset() * 60_000;
+  return new Date(d.getTime() - off).toISOString().slice(0, 10);
+}
+
+export async function workoutStats(): Promise<WorkoutStats> {
+  // every local day that has a finished session or a run counts as "trained"
+  const sessions = await all(
+    "SELECT started_at FROM session WHERE finished_at IS NOT NULL",
+  );
+  const runs = await all("SELECT logged_at FROM run");
+
+  const days = new Set<string>();
+  for (const s of sessions) days.add(localDayKey(parseDbDate(str(s.started_at))));
+  for (const r of runs) days.add(localDayKey(parseDbDate(str(r.logged_at))));
+
+  // streak: walk back from today (allow today to be empty and start at yesterday)
+  let streak = 0;
+  const cursor = new Date();
+  if (!days.has(localDayKey(cursor))) cursor.setDate(cursor.getDate() - 1);
+  while (days.has(localDayKey(cursor))) {
+    streak++;
+    cursor.setDate(cursor.getDate() - 1);
+  }
+
+  // sets in the last 7 days
+  const weekAgo = new Date();
+  weekAgo.setDate(weekAgo.getDate() - 7);
+  const weekRow = await one(
+    `SELECT COUNT(sl.id) AS sets
+     FROM session s
+     JOIN session_exercise se ON se.session_id = s.id
+     JOIN set_log sl          ON sl.session_exercise_id = se.id
+     WHERE s.started_at >= ?`,
+    [weekAgo.toISOString().slice(0, 19).replace("T", " ")],
+  );
+
+  const totalRow = await one(
+    "SELECT COUNT(*) AS n FROM session WHERE finished_at IS NOT NULL",
+  );
+
+  return {
+    streak,
+    thisWeekSets: num(weekRow?.sets ?? 0),
+    totalWorkouts: num(totalRow?.n ?? 0),
+  };
 }
 
 // ── Sessions ────────────────────────────────────────────────────────────────

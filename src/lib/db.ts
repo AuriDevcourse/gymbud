@@ -21,6 +21,7 @@ function client(): Client {
 const SCHEMA = `
   CREATE TABLE IF NOT EXISTS profile (
     id           INTEGER PRIMARY KEY CHECK (id = 1),
+    name         TEXT    NOT NULL DEFAULT '',
     goal         TEXT    NOT NULL DEFAULT 'general',
     days_per_week INTEGER NOT NULL DEFAULT 3,
     equipment    TEXT    NOT NULL DEFAULT '[]',
@@ -28,6 +29,16 @@ const SCHEMA = `
     onboarded    INTEGER NOT NULL DEFAULT 0,
     updated_at   TEXT    NOT NULL DEFAULT (datetime('now'))
   );
+
+  CREATE TABLE IF NOT EXISTS run (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    distance   REAL NOT NULL,            -- kilometres
+    duration   INTEGER NOT NULL,         -- seconds
+    logged_at  TEXT NOT NULL,            -- YYYY-MM-DD
+    note       TEXT,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+  CREATE INDEX IF NOT EXISTS idx_run_logged_at ON run(logged_at);
 
   CREATE TABLE IF NOT EXISTS bodyweight_log (
     id        INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -85,6 +96,7 @@ async function migrate(c: Client): Promise<void> {
   // forward-compat for databases created before these columns existed
   for (const sql of [
     "ALTER TABLE profile ADD COLUMN onboarded INTEGER NOT NULL DEFAULT 0",
+    "ALTER TABLE profile ADD COLUMN name TEXT NOT NULL DEFAULT ''",
     "ALTER TABLE set_log ADD COLUMN type TEXT NOT NULL DEFAULT 'normal'",
   ]) {
     try {

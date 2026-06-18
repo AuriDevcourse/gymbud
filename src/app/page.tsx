@@ -1,8 +1,9 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { ChevronRight, Dumbbell, Scale, TrendingUp } from "lucide-react";
-import { Card, Chip } from "@/components/ui";
+import { ChevronRight, Dumbbell, Flame, Scale, TrendingUp } from "lucide-react";
+import { Card } from "@/components/ui";
 import { SuggestionCard } from "@/components/suggestion-card";
+import { RunLogger } from "@/components/run-logger";
 import { WeightDelta } from "@/components/weight-delta";
 import {
   activeSession,
@@ -10,9 +11,9 @@ import {
   getProfile,
   listBodyWeight,
   listSessions,
+  workoutStats,
 } from "@/lib/store";
 import { weightTrend } from "@/lib/bodyweight";
-import { GOAL_LABELS } from "@/lib/types";
 import { fmtWeight } from "@/lib/format";
 import { relativeDay } from "@/lib/date";
 
@@ -28,23 +29,23 @@ function greeting(): string {
 export default async function Home() {
   const profile = await getProfile();
   if (!profile.onboarded) redirect("/welcome");
-  const [active, bwList, sessions, daysSince] = await Promise.all([
+  const [active, bwList, sessions, daysSince, stats] = await Promise.all([
     activeSession(),
     listBodyWeight(),
     listSessions(5),
     daysSinceByMuscle(),
+    workoutStats(),
   ]);
   const lastDone = sessions.find((s) => s.finishedAt);
   const bwTrend = weightTrend(bwList);
 
   return (
     <div className="flex flex-col gap-5 pb-4">
-      <header className="flex items-center justify-between">
-        <div>
-          <p className="text-sm text-muted">{greeting()}</p>
-          <h1 className="display text-2xl font-bold">Ready to train</h1>
-        </div>
-        <Chip tone="accent">{GOAL_LABELS[profile.goal]}</Chip>
+      <header>
+        <p className="text-sm text-muted">{greeting()}</p>
+        <h1 className="display text-2xl font-bold">
+          {profile.name ? profile.name : "Ready to train"}
+        </h1>
       </header>
 
       {active && (
@@ -61,6 +62,69 @@ export default async function Home() {
         </Link>
       )}
 
+      {/* Quick "about me" stats — minimal, tap a card for the full picture */}
+      <section className="grid grid-cols-2 gap-3">
+        <Card className="h-full">
+          <StatLabel icon={<Flame size={16} aria-hidden="true" />}>Streak</StatLabel>
+          <p className="stat-num text-2xl font-bold">
+            {stats.streak}
+            <span className="ml-1 text-base font-medium text-muted">
+              {stats.streak === 1 ? "day" : "days"}
+            </span>
+          </p>
+          <p className="text-sm text-muted">
+            {stats.streak > 0 ? "Keep it going" : "Train today to start"}
+          </p>
+        </Card>
+
+        <Card className="h-full">
+          <StatLabel icon={<Dumbbell size={16} aria-hidden="true" />}>This week</StatLabel>
+          <p className="stat-num text-2xl font-bold">
+            {stats.thisWeekSets}
+            <span className="ml-1 text-base font-medium text-muted">sets</span>
+          </p>
+          <p className="text-sm text-muted">{stats.totalWorkouts} workouts total</p>
+        </Card>
+
+        <Link href="/progress" className="block">
+          <Card className="h-full">
+            <StatLabel icon={<Scale size={16} aria-hidden="true" />}>Body weight</StatLabel>
+            {bwTrend.current ? (
+              <>
+                <p className="stat-num text-2xl font-bold">
+                  {fmtWeight(bwTrend.current.weight)}
+                  <span className="ml-1 text-base text-muted">{profile.unit}</span>
+                </p>
+                {bwTrend.delta !== null ? (
+                  <WeightDelta delta={bwTrend.delta} unit={profile.unit} goal={profile.goal} />
+                ) : (
+                  <p className="text-sm text-muted">{relativeDay(bwTrend.current.loggedAt)}</p>
+                )}
+              </>
+            ) : (
+              <p className="text-sm text-muted">Tap to log</p>
+            )}
+          </Card>
+        </Link>
+
+        <Link href="/progress" className="block">
+          <Card className="h-full">
+            <StatLabel icon={<TrendingUp size={16} aria-hidden="true" />}>Last session</StatLabel>
+            {lastDone ? (
+              <>
+                <p className="stat-num text-2xl font-bold">
+                  {lastDone.setCount}
+                  <span className="ml-1 text-base font-medium text-muted">sets</span>
+                </p>
+                <p className="text-sm text-muted">{relativeDay(lastDone.startedAt)}</p>
+              </>
+            ) : (
+              <p className="text-sm text-muted">No sessions yet</p>
+            )}
+          </Card>
+        </Link>
+      </section>
+
       {/* Suggested workout (client: supports Shuffle for variety) */}
       <SuggestionCard
         goal={profile.goal}
@@ -70,55 +134,7 @@ export default async function Home() {
         hasActive={!!active}
       />
 
-      {/* Quick stats */}
-      <section className="grid grid-cols-2 gap-3">
-        <Link href="/progress" className="block">
-          <Card className="h-full">
-            <div className="mb-2 flex items-center gap-1.5 text-muted">
-              <TrendingUp size={16} aria-hidden="true" />
-              <span className="text-xs font-medium uppercase tracking-wider">
-                Last session
-              </span>
-            </div>
-            {lastDone ? (
-              <>
-                <p className="stat-num text-2xl font-bold">{lastDone.setCount} sets</p>
-                <p className="text-sm text-muted">{relativeDay(lastDone.startedAt)}</p>
-              </>
-            ) : (
-              <p className="text-sm text-muted">No sessions yet</p>
-            )}
-          </Card>
-        </Link>
-
-        <Link href="/profile" className="block">
-          <Card className="h-full">
-            <div className="mb-2 flex items-center gap-1.5 text-muted">
-              <Scale size={16} aria-hidden="true" />
-              <span className="text-xs font-medium uppercase tracking-wider">
-                Body weight
-              </span>
-            </div>
-            {bwTrend.current ? (
-              <>
-                <p className="stat-num text-2xl font-bold">
-                  {fmtWeight(bwTrend.current.weight)}
-                  <span className="ml-1 text-base text-muted">{profile.unit}</span>
-                </p>
-                <div className="mt-0.5 flex items-center gap-2">
-                  {bwTrend.delta !== null ? (
-                    <WeightDelta delta={bwTrend.delta} unit={profile.unit} goal={profile.goal} />
-                  ) : (
-                    <p className="text-sm text-muted">{relativeDay(bwTrend.current.loggedAt)}</p>
-                  )}
-                </div>
-              </>
-            ) : (
-              <p className="text-sm text-muted">Tap to log</p>
-            )}
-          </Card>
-        </Link>
-      </section>
+      <RunLogger />
 
       <Link
         href="/exercises"
@@ -130,6 +146,15 @@ export default async function Home() {
         </span>
         <ChevronRight className="text-muted" aria-hidden="true" />
       </Link>
+    </div>
+  );
+}
+
+function StatLabel({ icon, children }: { icon: React.ReactNode; children: React.ReactNode }) {
+  return (
+    <div className="mb-2 flex items-center gap-1.5 text-muted">
+      {icon}
+      <span className="text-xs font-medium uppercase tracking-wider">{children}</span>
     </div>
   );
 }

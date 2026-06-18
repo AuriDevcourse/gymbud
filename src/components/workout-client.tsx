@@ -26,8 +26,13 @@ import { api } from "@/lib/format";
 import { peek, poke, useApi } from "@/lib/swr";
 import { parseDbDate } from "@/lib/date";
 import { getAlternatives } from "@/lib/coach";
-import { EXERCISES_BY_ID, type Equipment, type Exercise } from "@/lib/exercise-library";
-import { EQUIPMENT_LABELS } from "@/lib/types";
+import {
+  EXERCISES_BY_ID,
+  type Equipment,
+  type Exercise,
+  type MuscleGroup,
+} from "@/lib/exercise-library";
+import { EQUIPMENT_LABELS, MUSCLE_LABELS } from "@/lib/types";
 import type {
   Goal,
   Recommendation,
@@ -55,6 +60,27 @@ function targetSetsFor(goal: Goal): number {
   if (goal === "strength") return 5;
   if (goal === "muscle_gain") return 4;
   return 3; // fat_loss, general
+}
+
+// A short label for what this session is, from the muscles it trains.
+function sessionTitle(exercises: SessionExercise[]): string {
+  const groups = new Set<MuscleGroup>();
+  for (const e of exercises) {
+    const m = EXERCISES_BY_ID[e.exerciseId]?.muscleGroup;
+    if (m) groups.add(m);
+  }
+  if (groups.size === 0) return "Workout";
+  const has = (arr: MuscleGroup[]) => arr.some((m) => groups.has(m));
+  const push = has(["chest", "shoulders", "triceps"]);
+  const pull = has(["back", "biceps", "forearms"]);
+  const legs = has(["quads", "hamstrings", "glutes", "calves"]);
+  if (legs && (push || pull)) return "Full Body";
+  if (push && pull) return "Upper Body";
+  if (legs && !push && !pull) return "Lower Body";
+  if (push && !pull) return "Push";
+  if (pull && !push) return "Pull";
+  if (groups.has("core")) return "Core";
+  return MUSCLE_LABELS[[...groups][0]];
 }
 
 function celebrate(intense = false) {
@@ -458,34 +484,24 @@ export function WorkoutClient() {
 
   return (
     <div className="pb-4">
-      <div className="mb-3 flex items-center justify-between">
+      <div className="mb-4 flex items-center justify-between">
         <div>
           <h1 className="display text-2xl font-bold leading-tight">Workout</h1>
-          <ElapsedTimer startedAt={session.startedAt} />
+          <p className="mt-0.5 flex items-center gap-1.5 text-sm text-muted">
+            {exercises.length > 0 && (
+              <>
+                <span>{sessionTitle(exercises)}</span>
+                <span aria-hidden="true">·</span>
+              </>
+            )}
+            <ElapsedTimer startedAt={session.startedAt} />
+          </p>
         </div>
         <Button variant="surface" size="sm" onClick={() => setPhase("cooldown")} disabled={busy}>
           {busy ? <Loader2 size={15} className="animate-spin" /> : <Flag size={15} />}
           Finish
         </Button>
       </div>
-
-      {exercises.length > 0 && (
-        <div className="mb-4 flex items-center gap-1.5">
-          {exercises.map((e, i) => {
-            const done = e.sets.length > 0;
-            return (
-              <button
-                key={e.id}
-                aria-label={`Go to exercise ${i + 1}`}
-                onClick={() => setCurrent(i)}
-                className={`h-1.5 flex-1 rounded-full transition-colors ${
-                  i === idx ? "bg-accent" : done ? "bg-good/60" : "bg-surface-2"
-                }`}
-              />
-            );
-          })}
-        </div>
-      )}
 
       {error && (
         <div className="mb-3 flex items-center justify-between gap-2 rounded-[var(--radius-md)] border border-danger/30 bg-danger/10 px-3 py-2 text-sm text-danger">
@@ -517,7 +533,7 @@ export function WorkoutClient() {
             <p className="mb-2 text-xs font-semibold uppercase tracking-widest text-muted">
               Exercise {idx + 1} of {exercises.length}
             </p>
-            <div key={se.id} className="animate-fade-slide">
+            <div key={se.id} className="animate-exercise-in">
               <ExerciseCard
                 se={se}
                 unit={unit}
@@ -692,9 +708,9 @@ function ElapsedTimer({ startedAt }: { startedAt: string }) {
   }, []);
   const secs = Math.max(0, Math.floor((now - start) / 1000));
   return (
-    <span className="flex items-center gap-1.5 text-sm text-muted">
+    <span className="inline-flex items-center gap-1.5">
       <Timer size={14} aria-hidden="true" />
-      <span className="stat-num">{fmtClock(secs)}</span> elapsed
+      <span className="stat-num">{fmtClock(secs)}</span>
     </span>
   );
 }

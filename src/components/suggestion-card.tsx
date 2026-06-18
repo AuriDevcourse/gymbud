@@ -7,7 +7,7 @@ import { Button, Card, Chip, SectionTitle } from "./ui";
 import { StartSuggested } from "./start-suggested";
 import { suggestWorkout } from "@/lib/coach";
 import type { Equipment, MuscleGroup } from "@/lib/exercise-library";
-import { EQUIPMENT_LABELS, MUSCLE_LABELS, type Goal } from "@/lib/types";
+import { EQUIPMENT_LABELS, GOAL_LABELS, MUSCLE_LABELS, type Goal } from "@/lib/types";
 
 export function SuggestionCard({
   goal,
@@ -52,6 +52,10 @@ export function SuggestionCard({
             Shuffle
           </button>
         </div>
+        <p className="mb-3 text-sm text-muted">
+          Picked for your {GOAL_LABELS[goal].toLowerCase()} goal, {daysPerWeek}{" "}
+          {daysPerWeek === 1 ? "day" : "days"} a week. Shuffle for a different mix.
+        </p>
         <div className="mb-4 flex flex-wrap gap-1.5">
           {suggestion.focus.slice(0, 6).map((m) => (
             <Chip key={m} tone="muted">

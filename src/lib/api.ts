@@ -57,11 +57,22 @@ const EQUIPMENT = [
 ] as const;
 
 export const profileSchema = z.object({
+  name: z.string().trim().max(40).optional(),
   goal: z.enum(["muscle_gain", "fat_loss", "strength", "general"]),
   daysPerWeek: z.number().int().min(1).max(7),
   equipment: z.array(z.enum(EQUIPMENT)).max(8),
   unit: z.enum(["kg", "lb"]),
   onboarded: z.boolean().optional(),
+});
+
+export const runSchema = z.object({
+  distance: z.number().positive().max(500), // km
+  duration: z.number().int().positive().max(86_400), // seconds (≤ 24h)
+  loggedAt: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/, "Date must be YYYY-MM-DD.")
+    .optional(),
+  note: z.string().max(300).nullable().optional(),
 });
 
 export const bodyWeightSchema = z.object({
