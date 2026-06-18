@@ -1,5 +1,5 @@
 import { fail, intParam, ok, readBody, setSchema } from "@/lib/api";
-import { addSet, sessionExerciseOwner } from "@/lib/store";
+import { addSet, isSetPR, sessionExerciseOwner } from "@/lib/store";
 
 export const dynamic = "force-dynamic";
 
@@ -13,8 +13,8 @@ export async function POST(
 
   const body = await readBody(req, setSchema);
   if ("error" in body) return body.error;
-  return ok(
-    await addSet(id, body.data.weight, body.data.reps, body.data.type ?? "normal"),
-    201,
-  );
+  const type = body.data.type ?? "normal";
+  const set = await addSet(id, body.data.weight, body.data.reps, type);
+  const pr = type === "warmup" ? false : await isSetPR(id, set.weight, set.reps);
+  return ok({ ...set, pr }, 201);
 }

@@ -32,8 +32,9 @@ import {
   type Exercise,
   type MuscleGroup,
 } from "@/lib/exercise-library";
-import { EQUIPMENT_LABELS, MUSCLE_LABELS } from "@/lib/types";
+import { DIFFICULTY_LABELS, EQUIPMENT_LABELS, MUSCLE_LABELS } from "@/lib/types";
 import type {
+  Difficulty,
   Goal,
   Recommendation,
   Session,
@@ -333,10 +334,13 @@ export function WorkoutClient() {
     setRestKey((k) => k + 1);
     setRestOpen(true);
     try {
-      const real = await api<SetLog>(`/api/session-exercises/${se.id}/sets`, {
-        method: "POST",
-        body: JSON.stringify({ weight, reps, type }),
-      });
+      const real = await api<SetLog & { pr?: boolean }>(
+        `/api/session-exercises/${se.id}/sets`,
+        {
+          method: "POST",
+          body: JSON.stringify({ weight, reps, type }),
+        },
+      );
       patch((s) => ({
         ...s,
         exercises: s.exercises.map((e) =>
@@ -345,6 +349,10 @@ export function WorkoutClient() {
             : e,
         ),
       }));
+      if (real.pr) {
+        celebrate(true);
+        setToast({ msg: `New PR · ${EXERCISES_BY_ID[se.exerciseId]?.name ?? "lift"}` });
+      }
     } catch (e) {
       patch((s) => ({
         ...s,
@@ -402,6 +410,22 @@ export function WorkoutClient() {
       setError((e as Error).message);
     } finally {
       setBusy(false);
+    }
+  };
+
+  // RPE: rate how hard an exercise was; feeds next session's coach target.
+  const rateDifficulty = async (seId: number, difficulty: Difficulty) => {
+    patch((s) => ({
+      ...s,
+      exercises: s.exercises.map((e) => (e.id === seId ? { ...e, difficulty } : e)),
+    }));
+    try {
+      await api(`/api/session-exercises/${seId}`, {
+        method: "PATCH",
+        body: JSON.stringify({ difficulty }),
+      });
+    } catch {
+      /* non-critical */
     }
   };
 
@@ -463,7 +487,12 @@ export function WorkoutClient() {
       <div className="pb-4">
         <PhaseScreen kind="cooldown" busy={busy} onPrimary={finish} onSkip={finish} />
         <Sheet open={finishOpen} onClose={closeSummary} title="Session done">
-          <FinishSummary summary={summary} onNote={saveNote} />
+          <FinishSummary
+          exercises={session.exercises}
+          summary={summary}
+          onNote={saveNote}
+          onRate={rateDifficulty}
+        />
           <Button variant="accent" size="lg" className="mt-4 w-full" onClick={closeSummary}>
             <CheckCircle2 size={18} aria-hidden="true" />
             Done
@@ -639,7 +668,12 @@ export function WorkoutClient() {
       </Sheet>
 
       <Sheet open={finishOpen} onClose={closeSummary} title="Session done">
-        <FinishSummary summary={summary} onNote={saveNote} />
+        <FinishSummary
+          exercises={session.exercises}
+          summary={summary}
+          onNote={saveNote}
+          onRate={rateDifficulty}
+        />
         <Button variant="accent" size="lg" className="mt-4 w-full" onClick={closeSummary}>
           <CheckCircle2 size={18} aria-hidden="true" />
           Done
@@ -650,34 +684,74 @@ export function WorkoutClient() {
 }
 
 function FinishSummary({
+  exercises,
   summary,
   onNote,
+  onRate,
 }: {
+  exercises: SessionExercise[];
   summary: RecRow[] | null;
   onNote: (n: string) => void;
+  onRate: (seId: number, d: Difficulty) => void;
 }) {
+  const logged = exercises.filter((e) => e.sets.length > 0);
+  const [rated, setRated] = useState<Record<number, Difficulty>>(() =>
+    Object.fromEntries(
+      logged.filter((e) => e.difficulty).map((e) => [e.id, e.difficulty as Difficulty]),
+    ),
+  );
+  const DIFFS = Object.keys(DIFFICULTY_LABELS) as Difficulty[];
+  const recFor = (exId: string) => summary?.find((r) => r.exerciseId === exId)?.recommendation;
+  const rate = (seId: number, d: Difficulty) => {
+    setRated((m) => ({ ...m, [seId]: d }));
+    onRate(seId, d);
+  };
+
   return (
     <div>
-      <p className="mb-3 text-sm text-muted">Here&apos;s what your coach says for next time.</p>
-      <ul className="flex flex-col gap-2">
-        {(summary ?? [])
-          .filter((r) => r.recommendation.action !== "start")
-          .map((r) => (
-            <li
-              key={r.exerciseId}
-              className="animate-pop rounded-[var(--radius-md)] border border-border bg-surface-2 p-3"
-            >
-              <div className="mb-1 flex items-center justify-between gap-2">
-                <span className="font-medium">{r.name}</span>
-                <CoachBadge action={r.recommendation.action} />
-              </div>
-              <p className="text-sm text-muted">{r.recommendation.reason}</p>
-            </li>
-          ))}
-        {(!summary || summary.length === 0) && (
-          <li className="py-4 text-center text-sm text-muted">No sets logged this session.</li>
-        )}
-      </ul>
+      {logged.length > 0 ? (
+        <>
+          <p className="mb-3 text-sm text-muted">
+            How hard was each one? It tunes next session&apos;s weights.
+          </p>
+          <ul className="flex flex-col gap-2">
+            {logged.map((e) => {
+              const rec = recFor(e.exerciseId);
+              return (
+                <li
+                  key={e.id}
+                  className="rounded-[var(--radius-md)] border border-border bg-surface-2 p-3"
+                >
+                  <div className="mb-2 flex items-center justify-between gap-2">
+                    <span className="font-medium">
+                      {EXERCISES_BY_ID[e.exerciseId]?.name ?? e.exerciseId}
+                    </span>
+                    {rec && rec.action !== "start" && <CoachBadge action={rec.action} />}
+                  </div>
+                  <div className="flex gap-1.5">
+                    {DIFFS.map((d) => (
+                      <button
+                        key={d}
+                        onClick={() => rate(e.id, d)}
+                        aria-pressed={rated[e.id] === d}
+                        className={`flex-1 rounded-full border px-2 py-1.5 text-xs font-medium transition ${
+                          rated[e.id] === d
+                            ? "border-accent bg-accent/10 text-accent"
+                            : "border-border bg-surface text-muted"
+                        }`}
+                      >
+                        {DIFFICULTY_LABELS[d]}
+                      </button>
+                    ))}
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+        </>
+      ) : (
+        <p className="py-4 text-center text-sm text-muted">No sets logged this session.</p>
+      )}
       <label className="mt-4 block">
         <span className="mb-1 block text-xs font-medium uppercase tracking-wider text-muted">
           Session note (optional)

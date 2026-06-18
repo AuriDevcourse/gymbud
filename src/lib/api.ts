@@ -98,6 +98,12 @@ export const swapSchema = z.object({
   swapTo: z.string().min(1).max(80),
 });
 
+// PATCH a session exercise: either swap the movement or rate its difficulty.
+export const sessionExercisePatchSchema = z.object({
+  swapTo: z.string().min(1).max(80).optional(),
+  difficulty: z.enum(["easy", "right", "hard"]).optional(),
+});
+
 export const finishSchema = z.object({
   finish: z.literal(true).optional(),
   note: z.string().max(500).nullable().optional(),

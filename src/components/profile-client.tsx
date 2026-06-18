@@ -143,7 +143,7 @@ export function ProfileClient() {
             <p className="stat-num text-3xl font-bold leading-none text-accent">
               {stats.streak}
               <span className="ml-1.5 text-base font-medium text-muted-strong">
-                day{stats.streak === 1 ? "" : "s"} streak
+                week{stats.streak === 1 ? "" : "s"} streak
               </span>
             </p>
             <p className="mt-1 text-sm text-muted">

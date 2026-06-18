@@ -135,24 +135,33 @@ function localDayKey(d: Date): string {
   return new Date(d.getTime() - off).toISOString().slice(0, 10);
 }
 
+// Monday of the week a date falls in (local), as a YYYY-MM-DD key.
+function weekKey(d: Date): string {
+  const x = new Date(d);
+  const mondayOffset = (x.getDay() + 6) % 7; // 0 = Mon
+  x.setDate(x.getDate() - mondayOffset);
+  return localDayKey(x);
+}
+
 export async function workoutStats(): Promise<WorkoutStats> {
-  // every local day that has a finished session or a run counts as "trained"
+  // any finished session or run counts as a "trained" day
   const sessions = await all(
     "SELECT started_at FROM session WHERE finished_at IS NOT NULL",
   );
   const runs = await all("SELECT logged_at FROM run");
 
-  const days = new Set<string>();
-  for (const s of sessions) days.add(localDayKey(parseDbDate(str(s.started_at))));
-  for (const r of runs) days.add(localDayKey(parseDbDate(str(r.logged_at))));
+  // Streak is WEEKLY (like Strava): rest days are part of training, so a missed
+  // day shouldn't break it. A week counts if it has at least one workout/run.
+  const weeks = new Set<string>();
+  for (const s of sessions) weeks.add(weekKey(parseDbDate(str(s.started_at))));
+  for (const r of runs) weeks.add(weekKey(parseDbDate(str(r.logged_at))));
 
-  // streak: walk back from today (allow today to be empty and start at yesterday)
   let streak = 0;
   const cursor = new Date();
-  if (!days.has(localDayKey(cursor))) cursor.setDate(cursor.getDate() - 1);
-  while (days.has(localDayKey(cursor))) {
+  if (!weeks.has(weekKey(cursor))) cursor.setDate(cursor.getDate() - 7); // this week can still be empty
+  while (weeks.has(weekKey(cursor))) {
     streak++;
-    cursor.setDate(cursor.getDate() - 1);
+    cursor.setDate(cursor.getDate() - 7);
   }
 
   // sets in the last 7 days
@@ -229,7 +238,7 @@ export async function getSession(id: number): Promise<Session | null> {
   if (!s) return null;
 
   const ses = await all(
-    "SELECT id, session_id, exercise_id, order_index FROM session_exercise WHERE session_id = ? ORDER BY order_index ASC, id ASC",
+    "SELECT id, session_id, exercise_id, order_index, difficulty FROM session_exercise WHERE session_id = ? ORDER BY order_index ASC, id ASC",
     [id],
   );
 
@@ -245,6 +254,7 @@ export async function getSession(id: number): Promise<Session | null> {
       sessionId: num(e.session_id),
       exerciseId: str(e.exercise_id),
       orderIndex: num(e.order_index),
+      difficulty: e.difficulty === null ? null : (str(e.difficulty) as SessionExercise["difficulty"]),
       sets: setRows.map(toSet),
     });
   }
@@ -309,7 +319,17 @@ export async function addExercise(
     "INSERT INTO session_exercise (session_id, exercise_id, order_index) VALUES (?, ?, ?)",
     [sessionId, exerciseId, orderIndex],
   );
-  return { id: lastId, sessionId, exerciseId, orderIndex, sets: [] };
+  return { id: lastId, sessionId, exerciseId, orderIndex, difficulty: null, sets: [] };
+}
+
+export async function setDifficulty(
+  sessionExerciseId: number,
+  difficulty: SessionExercise["difficulty"],
+): Promise<void> {
+  await run("UPDATE session_exercise SET difficulty = ? WHERE id = ?", [
+    difficulty,
+    sessionExerciseId,
+  ]);
 }
 
 export async function removeExercise(sessionExerciseId: number): Promise<void> {
@@ -378,9 +398,14 @@ export async function deleteSet(setId: number): Promise<void> {
 export async function lastPerformance(
   exerciseId: string,
   excludeSessionId?: number,
-): Promise<{ sessionId: number; date: string; sets: SetLog[] } | null> {
+): Promise<{
+  sessionId: number;
+  date: string;
+  sets: SetLog[];
+  difficulty: SessionExercise["difficulty"];
+} | null> {
   const row = await one(
-    `SELECT se.id AS se_id, s.id AS session_id, s.started_at
+    `SELECT se.id AS se_id, se.difficulty AS difficulty, s.id AS session_id, s.started_at
      FROM session_exercise se
      JOIN session s ON s.id = se.session_id
      WHERE se.exercise_id = ? AND s.id != ?
@@ -396,7 +421,34 @@ export async function lastPerformance(
     )
   ).map(toSet);
   if (!sets.length) return null;
-  return { sessionId: num(row.session_id), date: str(row.started_at), sets };
+  return {
+    sessionId: num(row.session_id),
+    date: str(row.started_at),
+    sets,
+    difficulty: row.difficulty === null ? null : (str(row.difficulty) as SessionExercise["difficulty"]),
+  };
+}
+
+// A set is a PR if its estimated 1RM beats the best from any OTHER time we've
+// done this exercise (so there must be prior history to beat).
+export async function isSetPR(
+  sessionExerciseId: number,
+  weight: number,
+  reps: number,
+): Promise<boolean> {
+  if (weight <= 0) return false;
+  const row = await one(
+    `SELECT MAX(sl.weight * (1 + sl.reps / 30.0)) AS best
+     FROM set_log sl
+     JOIN session_exercise se ON se.id = sl.session_exercise_id
+     WHERE se.exercise_id = (SELECT exercise_id FROM session_exercise WHERE id = ?)
+       AND sl.session_exercise_id != ?
+       AND sl.type != 'warmup'`,
+    [sessionExerciseId, sessionExerciseId],
+  );
+  const best = row && row.best !== null ? num(row.best) : 0;
+  if (best <= 0) return false; // no prior history to beat
+  return weight * (1 + reps / 30) > best;
 }
 
 export interface ExercisePoint {

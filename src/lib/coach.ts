@@ -5,7 +5,7 @@ import {
   type Exercise,
   type MuscleGroup,
 } from "./exercise-library";
-import { REP_RANGE, type Goal, type Recommendation, type Unit } from "./types";
+import { REP_RANGE, type Difficulty, type Goal, type Recommendation, type Unit } from "./types";
 
 type SetInput = { weight: number; reps: number };
 
@@ -29,6 +29,7 @@ export function recommendNext(
   lastSets: SetInput[],
   goal: Goal,
   unit: Unit,
+  lastDifficulty?: Difficulty | null,
 ): Recommendation {
   const cur = topSet(thisSets);
   const last = topSet(lastSets);
@@ -46,22 +47,38 @@ export function recommendNext(
   const step = increment(unit);
   const u = unit;
 
-  // Hit the top of the rep range on the heaviest set -> add weight next time.
-  if (cur.reps >= range.high) {
-    return {
-      action: "increase",
-      reason: `You got ${cur.reps} reps at ${cur.weight}${u}, the top of your range. Add weight next session.`,
-      suggestedWeight: round(cur.weight + step, u),
-      lastTopSet: last,
-    };
-  }
-
   // Below the bottom of the range -> too heavy, ease off and rebuild.
   if (cur.reps < range.low) {
     return {
       action: "back_off",
       reason: `Only ${cur.reps} reps at ${cur.weight}${u}, below your ${range.low}-rep target. Drop a touch and own the form.`,
       suggestedWeight: round(Math.max(0, cur.weight - step), u),
+      lastTopSet: last,
+    };
+  }
+
+  // RPE override: if it felt hard last time, hold the weight even at the top of
+  // the range. Add weight only once it stops being a grind.
+  if (lastDifficulty === "hard") {
+    return {
+      action: "maintain",
+      reason: `You rated this hard at ${cur.weight}${u}. Stay here until it feels solid, then add weight.`,
+      suggestedWeight: round(cur.weight, u),
+      lastTopSet: last,
+    };
+  }
+
+  // Hit the top of the range, OR it felt easy and you're already in range
+  // -> add weight next time.
+  if (cur.reps >= range.high || (lastDifficulty === "easy" && cur.reps >= range.low)) {
+    const reason =
+      lastDifficulty === "easy"
+        ? `Felt easy at ${cur.weight}${u} for ${cur.reps}. Add weight next session.`
+        : `You got ${cur.reps} reps at ${cur.weight}${u}, the top of your range. Add weight next session.`;
+    return {
+      action: "increase",
+      reason,
+      suggestedWeight: round(cur.weight + step, u),
       lastTopSet: last,
     };
   }

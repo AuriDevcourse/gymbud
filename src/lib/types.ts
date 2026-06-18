@@ -68,11 +68,20 @@ export const SET_TYPE_BADGE: Record<SetType, string> = {
   failure: "F",
 };
 
+export type Difficulty = "easy" | "right" | "hard";
+
+export const DIFFICULTY_LABELS: Record<Difficulty, string> = {
+  easy: "Easy",
+  right: "Just right",
+  hard: "Hard",
+};
+
 export interface SessionExercise {
   id: number;
   sessionId: number;
   exerciseId: string;
   orderIndex: number;
+  difficulty: Difficulty | null;
   sets: SetLog[];
 }
 

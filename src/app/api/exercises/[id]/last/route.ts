@@ -28,6 +28,7 @@ export async function GET(
     [],
     profile.goal,
     profile.unit,
+    last?.difficulty,
   );
 
   return ok({ last, target });

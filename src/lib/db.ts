@@ -61,7 +61,8 @@ const SCHEMA = `
     id          INTEGER PRIMARY KEY AUTOINCREMENT,
     session_id  INTEGER NOT NULL REFERENCES session(id) ON DELETE CASCADE,
     exercise_id TEXT NOT NULL,
-    order_index INTEGER NOT NULL DEFAULT 0
+    order_index INTEGER NOT NULL DEFAULT 0,
+    difficulty  TEXT          -- easy | right | hard (RPE), set at finish
   );
   CREATE INDEX IF NOT EXISTS idx_se_session ON session_exercise(session_id);
   CREATE INDEX IF NOT EXISTS idx_se_exercise ON session_exercise(exercise_id);
@@ -100,6 +101,7 @@ async function migrate(c: Client): Promise<void> {
     "ALTER TABLE profile ADD COLUMN name TEXT NOT NULL DEFAULT ''",
     "ALTER TABLE set_log ADD COLUMN type TEXT NOT NULL DEFAULT 'normal'",
     "ALTER TABLE run ADD COLUMN kind TEXT NOT NULL DEFAULT 'long'",
+    "ALTER TABLE session_exercise ADD COLUMN difficulty TEXT",
   ]) {
     try {
       await c.execute(sql);
