@@ -2,9 +2,10 @@ import { coachSchema, fail, readBody } from "@/lib/api";
 
 export const dynamic = "force-dynamic";
 
-// Try the current stable flash first, then the rolling alias as a fallback
-// (the alias occasionally returns UNAVAILABLE under load).
-const MODELS = ["gemini-2.5-flash", "gemini-flash-latest"];
+// Fallback chain: any one of these can be briefly UNAVAILABLE under load, so we
+// try them in order (and do a second pass) before giving up.
+const MODELS = ["gemini-2.5-flash", "gemini-2.5-flash-lite", "gemini-flash-lite-latest"];
+const PASSES = 2;
 const endpoint = (model: string) =>
   `https://generativelanguage.googleapis.com/v1beta/models/${model}:streamGenerateContent?alt=sse`;
 
@@ -33,19 +34,21 @@ export async function POST(req: Request) {
   });
 
   let upstream: Response | null = null;
-  for (const model of MODELS) {
-    try {
-      const res = await fetch(endpoint(model), {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "X-goog-api-key": key },
-        body: payload,
-      });
-      if (res.ok && res.body) {
-        upstream = res;
-        break;
+  outer: for (let pass = 0; pass < PASSES; pass++) {
+    for (const model of MODELS) {
+      try {
+        const res = await fetch(endpoint(model), {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "X-goog-api-key": key },
+          body: payload,
+        });
+        if (res.ok && res.body) {
+          upstream = res;
+          break outer;
+        }
+      } catch {
+        /* try the next model */
       }
-    } catch {
-      /* try the next model */
     }
   }
 

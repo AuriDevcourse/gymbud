@@ -69,7 +69,12 @@ body {
   /* dvh = the real visible viewport on mobile (accounts for browser chrome),
      so a page fills the phone screen and only scrolls when content overflows. */
   min-height: 100dvh;
-  background: var(--background);
+  /* faint lime glow up top fading into a hint of green, over the dark base —
+     kept very low-alpha so text contrast stays well within WCAG AA */
+  background:
+    radial-gradient(135% 95% at 50% -5%, rgba(200, 241, 53, 0.08) 0%, rgba(70, 209, 138, 0.04) 28%, transparent 62%),
+    var(--background);
+  background-attachment: fixed;
   color: var(--foreground);
   font-family: var(--font-sans), system-ui, sans-serif;
   -webkit-font-smoothing: antialiased;
