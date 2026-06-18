@@ -2,11 +2,12 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Flame, Dumbbell, TrendingUp, User } from "lucide-react";
+import { Flame, Dumbbell, Sparkles, TrendingUp, User } from "lucide-react";
 
 const TABS = [
   { href: "/", label: "Today", icon: Flame },
   { href: "/exercises", label: "Exercises", icon: Dumbbell },
+  { href: "/coach", label: "Coach", icon: Sparkles },
   { href: "/progress", label: "Progress", icon: TrendingUp },
   { href: "/profile", label: "Profile", icon: User },
 ] as const;

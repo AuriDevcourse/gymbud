@@ -12,6 +12,7 @@
     "@libsql/client": "^0.17.4",
     "@upstash/ratelimit": "^2.0.8",
     "@upstash/redis": "^1.38.0",
+    "agentation": "^3.0.2",
     "canvas-confetti": "^1.9.4",
     "lucide-react": "^1.20.0",
     "next": "16.2.9",

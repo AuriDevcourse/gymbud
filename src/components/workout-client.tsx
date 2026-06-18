@@ -1,14 +1,17 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   CheckCircle2,
   ChevronLeft,
   ChevronRight,
   Flag,
+  Flame,
   Loader2,
+  Pencil,
   Plus,
+  Snowflake,
   Timer,
   Undo2,
   X,
@@ -16,6 +19,7 @@ import {
 import { Button, EmptyState } from "./ui";
 import { Sheet } from "./sheet";
 import { ExercisePicker } from "./exercise-picker";
+import { PENDING_WORKOUT_KEY } from "./start-suggested";
 import { CoachBadge } from "./coach-badge";
 import { ExerciseCard, type LastData } from "./exercise-card";
 import { WorkoutSkeleton } from "./skeleton";
@@ -44,6 +48,13 @@ function restSeconds(goal: Goal): number {
   if (goal === "muscle_gain") return 90;
   if (goal === "fat_loss") return 45;
   return 75;
+}
+
+// how many working sets the plan calls for, by goal
+function targetSetsFor(goal: Goal): number {
+  if (goal === "strength") return 5;
+  if (goal === "muscle_gain") return 4;
+  return 3; // fat_loss, general
 }
 
 function celebrate(intense = false) {
@@ -93,9 +104,61 @@ export function WorkoutClient() {
   const [summary, setSummary] = useState<RecRow[] | null>(null);
   const [busy, setBusy] = useState(false);
 
-  // revalidate active session
+  // bottom-bar "Next set" fires the current exercise card's add-set commit
+  const commitRef = useRef<(() => void) | null>(null);
+  const [editingSet, setEditingSet] = useState(false);
+
+  // workout phases: warm up → working sets → cool down
+  const [phase, setPhase] = useState<"warmup" | "main" | "cooldown">("main");
+
+  // On mount: either fulfill an optimistic "start this workout" hand-off, or
+  // just revalidate the active session for a normal resume.
   useEffect(() => {
     let cancelled = false;
+
+    let pending: { exerciseIds: string[] } | null = null;
+    try {
+      const raw = sessionStorage.getItem(PENDING_WORKOUT_KEY);
+      if (raw) pending = JSON.parse(raw);
+    } catch {
+      pending = null;
+    }
+
+    if (pending) {
+      // navigated here optimistically — create the session now
+      sessionStorage.removeItem(PENDING_WORKOUT_KEY);
+      const ids = pending.exerciseIds ?? [];
+      (async () => {
+        try {
+          const s = await api<Session>("/api/sessions", { method: "POST" });
+          let exercises = s.exercises;
+          if (exercises.length === 0 && ids.length) {
+            const added: SessionExercise[] = [];
+            for (const id of ids) {
+              const se = await api<SessionExercise>(`/api/sessions/${s.id}/exercises`, {
+                method: "POST",
+                body: JSON.stringify({ exerciseId: id }),
+              });
+              added.push(se);
+            }
+            exercises = added;
+          }
+          if (cancelled) return;
+          const full = { ...s, exercises };
+          setSession(full);
+          poke(ACTIVE_KEY, full);
+          setPhase("warmup");
+        } catch (e) {
+          if (!cancelled) setError((e as Error).message);
+        } finally {
+          if (!cancelled) setLoaded(true);
+        }
+      })();
+      return () => {
+        cancelled = true;
+      };
+    }
+
     api<Session | null>("/api/sessions/active")
       .then((s) => {
         if (cancelled) return;
@@ -149,6 +212,7 @@ export function WorkoutClient() {
     try {
       const s = await api<Session>("/api/sessions", { method: "POST" });
       setSession(s);
+      setPhase("warmup"); // new workouts open on the warm-up screen
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -386,10 +450,43 @@ export function WorkoutClient() {
     );
   }
 
+  // Warm-up screen: shown first on a fresh workout; "Start workout" → working sets.
+  if (phase === "warmup") {
+    return (
+      <div className="pb-4">
+        <PhaseScreen
+          kind="warmup"
+          onPrimary={() => setPhase("main")}
+          onSkip={() => setPhase("main")}
+        />
+      </div>
+    );
+  }
+
+  // Cool-down screen: optional, between the last set and saving the session.
+  if (phase === "cooldown") {
+    return (
+      <div className="pb-4">
+        <PhaseScreen kind="cooldown" busy={busy} onPrimary={finish} onSkip={finish} />
+        <Sheet open={finishOpen} onClose={closeSummary} title="Session done">
+          <FinishSummary summary={summary} onNote={saveNote} />
+          <Button variant="accent" size="lg" className="mt-4 w-full" onClick={closeSummary}>
+            <CheckCircle2 size={18} aria-hidden="true" />
+            Done
+          </Button>
+        </Sheet>
+      </div>
+    );
+  }
+
   const exercises = session.exercises;
   const idx = Math.min(current, Math.max(0, exercises.length - 1));
   const se = exercises[idx];
   const onLast = idx >= exercises.length - 1;
+  const target = targetSetsFor(goal);
+  // warm-up sets don't count toward the working-set target
+  const setsDone = se ? se.sets.filter((s) => s.type !== "warmup").length : 0;
+  const setsComplete = setsDone >= target;
 
   return (
     <div className="pb-4">
@@ -398,7 +495,7 @@ export function WorkoutClient() {
           <h1 className="display text-2xl font-bold leading-tight">Workout</h1>
           <ElapsedTimer startedAt={session.startedAt} />
         </div>
-        <Button variant="surface" size="sm" onClick={finish} disabled={busy}>
+        <Button variant="surface" size="sm" onClick={() => setPhase("cooldown")} disabled={busy}>
           {busy ? <Loader2 size={15} className="animate-spin" /> : <Flag size={15} />}
           Finish
         </Button>
@@ -454,14 +551,18 @@ export function WorkoutClient() {
                 se={se}
                 unit={unit}
                 lastData={lastMap[se.exerciseId]}
+                targetSets={target}
+                commitRef={commitRef}
                 onAddSet={(w, r, t) => addSet(se, w, r, t)}
                 onUpdateSet={(id, w, r, t) => updateSet(se, id, w, r, t)}
                 onDeleteSet={(id) => deleteSet(se, id)}
                 onSwap={() => cycleSwap(se)}
                 onRemove={() => removeExercise(se)}
+                onEditingChange={setEditingSet}
               />
             </div>
 
+            {/* Bottom bar: back · next set (until all sets logged) · next exercise */}
             <div className="mt-4 flex gap-2">
               <Button
                 variant="surface"
@@ -472,9 +573,31 @@ export function WorkoutClient() {
               >
                 <ChevronLeft size={18} aria-hidden="true" />
               </Button>
-              {onLast ? (
-                <Button variant="accent" size="lg" className="flex-1" onClick={finish} disabled={busy}>
-                  {busy ? <Loader2 size={18} className="animate-spin" /> : <Flag size={18} />}
+
+              {editingSet ? (
+                <div className="flex flex-1 items-center justify-center gap-2 rounded-[var(--radius-md)] border border-dashed border-border text-sm text-muted">
+                  <Pencil size={15} aria-hidden="true" />
+                  Finish editing the set above
+                </div>
+              ) : !setsComplete ? (
+                <Button
+                  variant="accent"
+                  size="lg"
+                  className="flex-1"
+                  onClick={() => commitRef.current?.()}
+                >
+                  <Plus size={18} aria-hidden="true" />
+                  Next set · {setsDone + 1} of {target}
+                </Button>
+              ) : onLast ? (
+                <Button
+                  variant="accent"
+                  size="lg"
+                  className="flex-1"
+                  onClick={() => setPhase("cooldown")}
+                  disabled={busy}
+                >
+                  <Flag size={18} aria-hidden="true" />
                   Finish workout
                 </Button>
               ) : (
@@ -489,6 +612,18 @@ export function WorkoutClient() {
                 </Button>
               )}
             </div>
+
+            {/* once the target is met, allow extra sets without forcing them */}
+            {setsComplete && !editingSet && (
+              <Button
+                variant="ghost"
+                className="mt-2 w-full"
+                onClick={() => commitRef.current?.()}
+              >
+                <Plus size={16} aria-hidden="true" />
+                Add another set
+              </Button>
+            )}
 
             <Button variant="ghost" className="mt-2 w-full" onClick={() => setPickerOpen(true)}>
               <Plus size={16} aria-hidden="true" />
@@ -662,4 +797,137 @@ function fmtClock(secs: number): string {
   const m = Math.floor(secs / 60);
   const s = secs % 60;
   return `${m}:${String(s).padStart(2, "0")}`;
+}
+
+const PHASE_CONFIG = {
+  warmup: {
+    title: "Warm up",
+    lead: "Prime your body before the working sets.",
+    primary: "Start workout",
+    skip: "Skip warm-up",
+    seconds: 300,
+    tips: [
+      "5 min light cardio — bike, row or brisk walk",
+      "Dynamic stretches & mobility for today's muscles",
+      "1–2 light ramp-up sets on your first lift",
+    ],
+  },
+  cooldown: {
+    title: "Cool down",
+    lead: "Bring your heart rate down and help recovery.",
+    primary: "Finish workout",
+    skip: "Skip cool-down",
+    seconds: 180,
+    tips: [
+      "3–5 min easy walk or light cardio",
+      "Static stretches for the muscles you trained",
+      "Slow nasal breathing for a minute",
+    ],
+  },
+} as const;
+
+function PhaseScreen({
+  kind,
+  onPrimary,
+  onSkip,
+  busy,
+}: {
+  kind: "warmup" | "cooldown";
+  onPrimary: () => void;
+  onSkip: () => void;
+  busy?: boolean;
+}) {
+  const cfg = PHASE_CONFIG[kind];
+  const Icon = kind === "warmup" ? Flame : Snowflake;
+  return (
+    <div className="flex min-h-[72dvh] flex-col">
+      <div className="mb-5 flex items-center gap-3">
+        <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-accent/15 text-accent">
+          <Icon size={22} aria-hidden="true" />
+        </span>
+        <div>
+          <h1 className="display text-2xl font-bold leading-tight">{cfg.title}</h1>
+          <p className="text-sm text-muted">{cfg.lead}</p>
+        </div>
+      </div>
+
+      <ul className="flex flex-col gap-2">
+        {cfg.tips.map((t) => (
+          <li
+            key={t}
+            className="flex items-start gap-2.5 rounded-[var(--radius-md)] border border-border bg-surface px-3 py-3 text-sm"
+          >
+            <CheckCircle2 size={17} className="mt-0.5 shrink-0 text-accent" aria-hidden="true" />
+            <span>{t}</span>
+          </li>
+        ))}
+      </ul>
+
+      <PhaseTimer seconds={cfg.seconds} />
+
+      <div className="mt-auto flex flex-col gap-2 pt-6">
+        <Button variant="accent" size="lg" onClick={onPrimary} disabled={busy}>
+          {busy ? <Loader2 size={18} className="animate-spin" /> : null}
+          {cfg.primary}
+          {!busy && <ChevronRight size={18} aria-hidden="true" />}
+        </Button>
+        <Button variant="ghost" onClick={onSkip} disabled={busy}>
+          {cfg.skip}
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+function PhaseTimer({ seconds }: { seconds: number }) {
+  const [left, setLeft] = useState(seconds);
+  const [running, setRunning] = useState(false);
+
+  useEffect(() => {
+    if (!running) return;
+    const t = setInterval(() => setLeft((l) => Math.max(0, l - 1)), 1000);
+    return () => clearInterval(t);
+  }, [running]);
+
+  useEffect(() => {
+    if (left === 0 && running) {
+      setRunning(false);
+      if (typeof navigator !== "undefined" && navigator.vibrate) navigator.vibrate(180);
+    }
+  }, [left, running]);
+
+  const done = left === 0;
+
+  return (
+    <div className="mt-4 flex items-center gap-3 rounded-[var(--radius-md)] border border-border bg-surface px-4 py-3">
+      <Timer size={18} className={done ? "text-good" : "text-accent"} aria-hidden="true" />
+      <span className={`stat-num text-2xl ${done ? "text-good" : ""}`}>
+        {done ? "Done" : fmtClock(left)}
+      </span>
+      <div className="ml-auto flex gap-1.5">
+        <button
+          onClick={() => {
+            if (done) {
+              setLeft(seconds);
+              setRunning(true);
+            } else {
+              setRunning((r) => !r);
+            }
+          }}
+          className="rounded-md border border-border bg-surface-2 px-3 py-1.5 text-xs font-medium active:bg-surface-3"
+        >
+          {done ? "Restart" : running ? "Pause" : "Start"}
+        </button>
+        <button
+          onClick={() => {
+            setRunning(false);
+            setLeft(seconds);
+          }}
+          className="rounded-md border border-border bg-surface-2 px-3 py-1.5 text-xs font-medium text-muted active:bg-surface-3"
+        >
+          Reset
+        </button>
+      </div>
+    </div>
+  );
 }

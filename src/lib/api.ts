@@ -91,4 +91,8 @@ export const finishSchema = z.object({
   note: z.string().max(500).nullable().optional(),
 });
 
+export const coachSchema = z.object({
+  question: z.string().trim().min(2, "Ask a question.").max(500, "Keep it under 500 characters."),
+});
+
 export type EquipmentList = Equipment[];

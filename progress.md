@@ -1,29 +1,62 @@
-# Gym Coach — Session Handoff
+# GymBud — Session Handoff
 
-## DEPLOY MIGRATION (2026-06-17) — now Vercel-ready
-Moved off local better-sqlite3 (ephemeral on serverless) to **libSQL/Turso**:
-- `src/lib/db.ts`: `@libsql/client`. Local = `file:./data/gym.db` (no account, offline);
-  prod = Turso when `TURSO_DATABASE_URL`/`TURSO_AUTH_TOKEN` set. Same SQLite dialect.
-- `src/lib/store.ts`: **all functions are now async** (libSQL is async). Every caller
-  (route handlers + server components Home/welcome/progress) updated to `await`.
-- **Rate limiting** `src/lib/ratelimit.ts`: Upstash when `UPSTASH_REDIS_REST_*` set, else
-  in-memory. `proxy.ts` is now async and calls it.
-- **Demos** serverless-safe: matched once into `demo_cache` table; browser loads photos
-  straight from jsdelivr CDN (CSP `img-src` allows it). No disk writes. Removed the old
-  `/api/demo/[id]/[frame]` proxy + file cache.
-- `vercel.json` pins functions to `fra1` (EU). Verified locally in file mode (full flow + demos).
+## SESSION 2026-06-18 — UX batch (9 changes, all built + runtime-checked on dev)
+One-line state: 9 requested changes done on local dev (`npm run dev`), compiled clean, NOT yet committed/pushed.
 
-**TO DEPLOY (Auri's next actions):** Turso DB `gymbud` (EU West Ireland) created. Need to:
-1. Turso: create token. 2. Upstash: create Redis, copy REST url+token. 3. Vercel: import the
-`gymbud` repo, add env vars TURSO_DATABASE_URL, TURSO_AUTH_TOKEN, UPSTASH_REDIS_REST_URL,
-UPSTASH_REDIS_REST_TOKEN, APP_PASSCODE. Deploy. (Risk to watch: Next 16 `proxy` runs on Node
-runtime — confirm Vercel runs it; if not, move rate-limit/gate into the routes.)
+What was done this session:
+1. **Disable zoom** — `layout.tsx` viewport `maximumScale:1, userScalable:false, interactiveWidget:"overlays-content"`; `globals.css` body `touch-action: pan-x pan-y`; new `components/no-zoom.tsx` (iOS pinch-gesture guard).
+2. **Fit to screen** — body `min-height: 100dvh`.
+3. **Bottom nav lift fix** — was keyboard resizing the viewport; fixed via `interactiveWidget: overlays-content`.
+4. **Workout set flow** — `Set N of target` + bottom-bar "Next set" (commit moved out of card via `commitRef`); "Next exercise" locked until target sets logged. Target by goal in `workout-client.tsx#targetSetsFor`. Card edits inline. Files: `exercise-card.tsx`, `workout-client.tsx`.
+5. **Warm-up / cool-down** — phase screens (`PhaseScreen`/`PhaseTimer` in `workout-client.tsx`); new workouts open on warm-up; finishing routes through cool-down (both skippable).
+6. **Shuffle workouts** — `coach.ts#suggestWorkout` now takes `seed` (0 = canonical, else random valid pick per muscle); new client `components/suggestion-card.tsx` with Shuffle button; `app/page.tsx` uses it.
+7. **Bodyweight progression** — new `lib/bodyweight.ts` (`weightTrend`, `changeTone`) + `components/weight-delta.tsx` (goal-aware up/down pill). Surfaced on profile, home stat card, progress chart header.
+8. **Optimistic navigation** — "Start this workout" navigates instantly; session created on the workout page via `sessionStorage` hand-off (`PENDING_WORKOUT_KEY` in `start-suggested.tsx`, fulfilled in `workout-client.tsx` mount effect).
+9. **AI Coach (Gemini)** — new `Coach` tab (`bottom-nav.tsx`), `app/coach/page.tsx` + `components/coach-client.tsx` (streaming chat, gym-only), `app/api/coach/route.ts` (server-side key, SSE→text, model fallback `gemini-2.5-flash` → `gemini-flash-latest`). `coachSchema` in `lib/api.ts`. Verified streaming works with the real key. `gemini-2.0-flash` is RETIRED — don't use.
 
-## Current state (2026-06-17)
-v1 core is **built, type-checks, lints clean, production-builds, and is smoke-tested end-to-end**.
-A personal, single-user, mobile-first PWA gym tracker. Next.js 16 + better-sqlite3 on a VPS.
-Athletic dark theme (lime accent), Lucide icons. Not yet deployed.
-A second pass added the UX/security hardening below (also verified at runtime).
+Also: **Agentation** installed (visual feedback toolbar) — `components/Agentation` in `layout.tsx` (dev-only), MCP server registered, dev-only CSP in `next.config.ts` allows `localhost:4747`.
+
+NEXT STEPS:
+1. Review on phone via Agentation; address annotations.
+2. If keeping the changes: commit on a branch (don't push straight to `main` — auto-deploys to Vercel). `GEMINI_API_KEY` must be added to Vercel env for Coach to work in prod.
+3. Carry the OPEN ITEMS below (APP_PASSCODE still unset on Vercel; rotate Turso + Gemini creds).
+
+## STATUS: LIVE on Vercel (2026-06-17)
+- **Live:** https://gymbud-ecru.vercel.app  ·  **Repo:** github.com/AuriDevcourse/gymbud (auto-deploys on push to `main`)
+- **Vercel project:** auridevcourses-projects/gymbud · region `fra1`
+- **Stack:** Next.js 16 + libSQL/**Turso** (DB `gymbud`, eu-west-ireland) + **Upstash** (rate limit) + jsdelivr (demo photos)
+- **Brand:** GymBud — lime dumbbell mark, athletic-dark UI. Health check: `curl .../api/health` → `{"ok":true}`.
+
+### OPEN ITEMS (do next)
+1. **APP_PASSCODE is NOT set on Vercel → the app is OPEN to anyone with the URL** (it holds personal data).
+   Lock it: `vercel env add APP_PASSCODE production` (or dashboard) then redeploy.
+2. **Rotate creds that passed through chat:** Turso DB token (Turso → Invalidate Tokens → mint new) and the
+   Gemini key. Update Vercel + `.env.local` after.
+3. **Backlog features:** workout templates/routines (next big one), PRs + warm-up sets, AI weekly insight.
+
+### DEPLOY GOTCHA — remember this (cost hours)
+Turso has TWO token types that look identical (both `eyJ…`): an **account/API token** (payload `{jti, org_id}`)
+and a **database token** (payload has `"a":"rw"`). The app needs the **database** token; account tokens → `401`.
+- Mint the right one: `turso db tokens create gymbud`, or the DB page "Create Token", or
+  `POST https://api.turso.tech/v1/organizations/auridevcourse/databases/gymbud/auth/tokens` (Bearer = an account token).
+- **Verify any token before using:** `POST {db-url}/v2/pipeline` with `Authorization: Bearer <tok>` → `200` good, `401` wrong.
+- **Set Vercel env via `vercel env add` (CLI), not the dashboard textarea** — manual paste kept adding quotes/whitespace
+  that broke the token across many redeploys. Env changes require a redeploy.
+
+### Serverless migration (done)
+- `src/lib/db.ts`: `@libsql/client`. Local = `file:./data/gym.db` (offline, no account); prod = Turso via env.
+- `src/lib/store.ts`: **all async** now; every caller (routes + server components) awaits.
+- `src/lib/ratelimit.ts`: Upstash when env set, in-memory fallback; `proxy.ts` async (runs fine on Vercel).
+- Demos serverless-safe: matched once into `demo_cache` table, photos served from jsdelivr CDN (CSP allows it).
+- `vercel.json` pins `fra1`.
+
+### How to run
+- Local: `npm run dev` (reads `.env.local`; uses Turso if its vars are set, else the offline file).
+- Deploy: just `git push` (auto), or `vercel deploy --prod` from the linked folder.
+
+## Build history (reference)
+v1 core + UX/security hardening, all built/linted/runtime-verified before the deploy migration.
+Athletic dark theme (lime accent), Lucide icons, mobile-first PWA.
 
 ## UX + security hardening pass (2026-06-17)
 - **Fixed the "screen shifts on tap" bug**: `scrollbar-gutter: stable` (the centered

@@ -157,6 +157,7 @@ export function suggestWorkout(opts: {
   daysPerWeek: number;
   available?: Equipment[];
   daysSince: Partial<Record<MuscleGroup, number>>; // days since each muscle trained
+  seed?: number; // 0 = canonical pick; any other value = a randomized variation
 }): Suggestion {
   const available = opts.available ?? [];
   const staleness = (m: MuscleGroup) => opts.daysSince[m] ?? 999;
@@ -189,44 +190,66 @@ export function suggestWorkout(opts: {
     focus = [...BUCKETS[pick]];
   }
 
-  const exercises = selectExercises(focus, available, opts.goal);
+  const exercises = selectExercises(focus, available, opts.goal, opts.seed ?? 0);
   return { title, focus, exercises };
+}
+
+// tiny deterministic PRNG so a given seed always yields the same variation
+function makeRng(seed: number): () => number {
+  let s = (seed || 1) >>> 0;
+  return () => {
+    s = (s * 1664525 + 1013904223) >>> 0;
+    return s / 4294967296;
+  };
 }
 
 function selectExercises(
   muscles: MuscleGroup[],
   available: Equipment[],
   goal: Goal,
+  seed: number,
 ): Exercise[] {
   const maxCount = goal === "fat_loss" ? 7 : 6;
   const picked: Exercise[] = [];
-  const usedMuscles = new Set<MuscleGroup>();
+  const rng = makeRng(seed);
 
-  // Pass 1: one compound per target muscle (big movers first).
+  // seed 0 => the canonical "best" pick (free-weight compounds first);
+  // any other seed => a random valid pick, so each shuffle hits the same
+  // muscles with different exercises.
+  const choose = (cands: Exercise[]): Exercise | undefined => {
+    if (!cands.length) return undefined;
+    if (seed === 0)
+      return [...cands].sort((a, b) => equipmentRank(a) - equipmentRank(b))[0];
+    return cands[Math.floor(rng() * cands.length)];
+  };
+
+  // Pass 1: one compound per target muscle (big movers).
   for (const m of muscles) {
     if (picked.length >= maxCount) break;
-    const ex = EXERCISES.filter(
-      (e) =>
-        e.muscleGroup === m &&
-        e.type === "compound" &&
-        isAvailable(e, available),
-    ).sort((a, b) => equipmentRank(a) - equipmentRank(b))[0];
-    if (ex && !picked.some((p) => p.id === ex.id)) {
-      picked.push(ex);
-      usedMuscles.add(m);
-    }
+    const ex = choose(
+      EXERCISES.filter(
+        (e) =>
+          e.muscleGroup === m &&
+          e.type === "compound" &&
+          isAvailable(e, available) &&
+          !picked.some((p) => p.id === e.id),
+      ),
+    );
+    if (ex) picked.push(ex);
   }
 
   // Pass 2: fill remaining slots with isolation work for the same muscles.
   for (const m of muscles) {
     if (picked.length >= maxCount) break;
-    const ex = EXERCISES.filter(
-      (e) =>
-        e.muscleGroup === m &&
-        e.type === "isolation" &&
-        isAvailable(e, available) &&
-        !picked.some((p) => p.id === e.id),
-    ).sort((a, b) => equipmentRank(a) - equipmentRank(b))[0];
+    const ex = choose(
+      EXERCISES.filter(
+        (e) =>
+          e.muscleGroup === m &&
+          e.type === "isolation" &&
+          isAvailable(e, available) &&
+          !picked.some((p) => p.id === e.id),
+      ),
+    );
     if (ex) picked.push(ex);
   }
 

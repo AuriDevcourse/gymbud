@@ -21,6 +21,7 @@ export default async function ProgressPage() {
       bodyweight={bodyweight}
       sessions={sessions}
       unit={profile.unit}
+      goal={profile.goal}
     />
   );
 }

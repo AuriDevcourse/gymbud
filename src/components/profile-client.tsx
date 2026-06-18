@@ -4,9 +4,11 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Check, Loader2, Lock, Scale } from "lucide-react";
 import { Button, Card, SectionTitle } from "./ui";
+import { WeightDelta } from "./weight-delta";
 import { api, fmtWeight } from "@/lib/format";
 import { peek, poke } from "@/lib/swr";
 import { PageSkeleton } from "./skeleton";
+import { weightTrend } from "@/lib/bodyweight";
 import { relativeDay, todayISO } from "@/lib/date";
 import type { Equipment } from "@/lib/exercise-library";
 import {
@@ -107,6 +109,7 @@ export function ProfileClient() {
   };
 
   const recent = [...weights].reverse().slice(0, 6);
+  const trend = weightTrend(weights);
 
   return (
     <div className="flex flex-col gap-5 pb-4">
@@ -127,6 +130,28 @@ export function ProfileClient() {
       <section>
         <SectionTitle>Body weight</SectionTitle>
         <Card>
+          {trend.current && (
+            <div className="mb-4 flex items-end justify-between gap-2">
+              <div>
+                <p className="stat-num text-3xl font-bold leading-none">
+                  {fmtWeight(trend.current.weight)}
+                  <span className="ml-1 text-base font-medium text-muted">{p.unit}</span>
+                </p>
+                <p className="mt-1 text-xs text-muted">{relativeDay(trend.current.loggedAt)}</p>
+              </div>
+              <div className="flex flex-col items-end gap-1">
+                <WeightDelta delta={trend.delta} unit={p.unit} goal={p.goal} label="vs last" />
+                {trend.totalDelta !== null && (
+                  <WeightDelta
+                    delta={trend.totalDelta}
+                    unit={p.unit}
+                    goal={p.goal}
+                    label="all time"
+                  />
+                )}
+              </div>
+            </div>
+          )}
           <div className="flex items-end gap-2">
             <label className="flex-1">
               <span className="mb-1 block text-xs text-muted">Today ({p.unit})</span>

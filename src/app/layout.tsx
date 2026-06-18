@@ -2,6 +2,8 @@ import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono, Oswald } from "next/font/google";
 import "./globals.css";
 import { BottomNav } from "@/components/bottom-nav";
+import { NoZoom } from "@/components/no-zoom";
+import { Agentation } from "agentation";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -34,8 +36,14 @@ export const viewport: Viewport = {
   themeColor: "#0a0c0e",
   width: "device-width",
   initialScale: 1,
-  // pinch-zoom stays enabled for low-vision users (WCAG 2.2 AA)
+  // Personal single-user app: lock zoom so accidental pinch / double-tap
+  // mid-set never shifts the layout. (Trades off WCAG pinch-zoom by request.)
+  maximumScale: 1,
+  userScalable: false,
   viewportFit: "cover",
+  // Keyboard overlays content instead of resizing the viewport, so the fixed
+  // bottom nav stays glued to the bottom and never "lifts up" when typing.
+  interactiveWidget: "overlays-content",
 };
 
 export default function RootLayout({
@@ -47,8 +55,10 @@ export default function RootLayout({
       className={`${geistSans.variable} ${geistMono.variable} ${oswald.variable} h-full antialiased`}
     >
       <body className="min-h-full">
+        <NoZoom />
         <main className="mx-auto w-full max-w-md px-4 pt-5">{children}</main>
         <BottomNav />
+        {process.env.NODE_ENV === "development" && <Agentation />}
       </body>
     </html>
   );

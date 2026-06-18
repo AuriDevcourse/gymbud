@@ -12,24 +12,28 @@ import {
 } from "recharts";
 import { Trash2, TrendingUp } from "lucide-react";
 import { Card, EmptyState, SectionTitle } from "./ui";
+import { WeightDelta } from "./weight-delta";
 import { Skeleton } from "./skeleton";
 import { useApi } from "@/lib/swr";
 import { api, fmtWeight } from "@/lib/format";
+import { weightTrend } from "@/lib/bodyweight";
 import { dayLabel, parseDbDate, relativeDay } from "@/lib/date";
 import type { ExercisePoint, SessionSummary } from "@/lib/store";
 import type { Exercise } from "@/lib/exercise-library";
-import type { BodyWeightEntry, Unit } from "@/lib/types";
+import type { BodyWeightEntry, Goal, Unit } from "@/lib/types";
 
 export function ProgressClient({
   exercises,
   bodyweight,
   sessions,
   unit,
+  goal,
 }: {
   exercises: { id: string; name: string }[];
   bodyweight: BodyWeightEntry[];
   sessions: SessionSummary[];
   unit: Unit;
+  goal: Goal;
 }) {
   const [selected, setSelected] = useState(exercises[0]?.id ?? "");
   const { data: prog, loading: progLoading } = useApi<{
@@ -58,6 +62,7 @@ export function ProgressClient({
     () => bodyweight.map((b) => ({ x: dayLabel(b.loggedAt), y: b.weight })),
     [bodyweight],
   );
+  const bwTrend = useMemo(() => weightTrend(bodyweight), [bodyweight]);
   const exData = useMemo(
     () => (points ?? []).map((p) => ({ x: dayLabel(p.date), y: p.est1rm })),
     [points],
@@ -71,6 +76,30 @@ export function ProgressClient({
       <section>
         <SectionTitle>Body weight</SectionTitle>
         <Card>
+          {bwTrend.current && (
+            <div className="mb-3 flex items-end justify-between gap-2">
+              <div>
+                <p className="stat-num text-3xl font-bold leading-none">
+                  {fmtWeight(bwTrend.current.weight)}
+                  <span className="ml-1 text-base font-medium text-muted">{unit}</span>
+                </p>
+                <p className="mt-1 text-xs text-muted">
+                  {relativeDay(bwTrend.current.loggedAt)}
+                </p>
+              </div>
+              <div className="flex flex-col items-end gap-1">
+                <WeightDelta delta={bwTrend.delta} unit={unit} goal={goal} label="vs last" />
+                {bwTrend.totalDelta !== null && (
+                  <WeightDelta
+                    delta={bwTrend.totalDelta}
+                    unit={unit}
+                    goal={goal}
+                    label="all time"
+                  />
+                )}
+              </div>
+            </div>
+          )}
           {bwData.length > 1 ? (
             <Chart data={bwData} unit={unit} />
           ) : (

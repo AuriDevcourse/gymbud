@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { ArrowLeftRight, Check, Layers, Pencil, Plus, PlayCircle, Trash2, X } from "lucide-react";
+import { useEffect, useState, type MutableRefObject } from "react";
+import { ArrowLeftRight, Check, Layers, Pencil, PlayCircle, Trash2, X } from "lucide-react";
 import { Stepper } from "./stepper";
 import { Chip } from "./ui";
 import { CoachBadge } from "./coach-badge";
@@ -32,20 +32,29 @@ export function ExerciseCard({
   se,
   unit,
   lastData,
+  targetSets,
+  commitRef,
   onAddSet,
   onUpdateSet,
   onDeleteSet,
   onSwap,
   onRemove,
+  onEditingChange,
 }: {
   se: SessionExercise;
   unit: Unit;
   lastData?: LastData;
+  /** how many working sets the plan calls for (drives the "Set N of M" label) */
+  targetSets: number;
+  /** the parent's bottom-bar "Next set" button fires whatever we register here */
+  commitRef: MutableRefObject<(() => void) | null>;
   onAddSet: (weight: number, reps: number, type: SetType) => void;
   onUpdateSet: (setId: number, weight: number, reps: number, type: SetType) => void;
   onDeleteSet: (setId: number) => void;
   onSwap: () => void;
   onRemove: () => void;
+  /** lets the parent hide the "Next set" button while a set is being edited */
+  onEditingChange?: (editing: boolean) => void;
 }) {
   const ex = EXERCISES_BY_ID[se.exerciseId];
   const isBW = ex?.equipment === "bodyweight";
@@ -95,6 +104,24 @@ export function ExerciseCard({
     }
     setSetType("normal");
   };
+
+  // Drive the "Next set" button in the parent's bottom bar. While editing, we
+  // register nothing so the parent hides it (the inline Save/Cancel takes over).
+  useEffect(() => {
+    commitRef.current = editingId
+      ? null
+      : () => {
+          onAddSet(weight, reps, setType);
+          setSetType("normal");
+        };
+    return () => {
+      commitRef.current = null;
+    };
+  }, [editingId, weight, reps, setType, onAddSet, commitRef]);
+
+  useEffect(() => {
+    onEditingChange?.(!!editingId);
+  }, [editingId, onEditingChange]);
 
   const setLabel = (s: SetLog) =>
     s.weight > 0 ? `${fmtWeight(s.weight, unit)} × ${s.reps}` : `BW × ${s.reps}`;
@@ -234,7 +261,9 @@ export function ExerciseCard({
       {/* composer — clearly labelled for the set you're about to add/edit */}
       <div className="mt-2 border-t border-border/60 p-4">
         <p className="text-xs font-semibold uppercase tracking-widest text-accent">
-          {editingId ? `Editing set ${composerNumber}` : `Add set ${composerNumber}`}
+          {editingId
+            ? `Editing set ${composerNumber}`
+            : `Set ${composerNumber} of ${targetSets}`}
         </p>
         {composerPrev && (
           <p className="mb-2 mt-0.5 text-xs text-muted">
@@ -286,8 +315,10 @@ export function ExerciseCard({
           </button>
         </div>
 
-        <div className="mt-3 flex gap-2">
-          {editingId && (
+        {/* When adding, the "Next set" button lives in the workout bottom bar.
+            Editing keeps its own inline Save / Cancel. */}
+        {editingId && (
+          <div className="mt-3 flex gap-2">
             <button
               onClick={cancelEdit}
               className="flex h-12 items-center justify-center gap-1.5 rounded-[var(--radius-md)] border border-border bg-surface-2 px-4 font-medium text-muted-strong active:bg-surface-3"
@@ -295,24 +326,15 @@ export function ExerciseCard({
               <X size={18} aria-hidden="true" />
               Cancel
             </button>
-          )}
-          <button
-            onClick={submit}
-            className="flex h-12 flex-1 items-center justify-center gap-2 rounded-[var(--radius-md)] bg-accent font-semibold text-accent-foreground active:brightness-95"
-          >
-            {editingId ? (
-              <>
-                <Check size={20} strokeWidth={2.6} aria-hidden="true" />
-                Save set {composerNumber}
-              </>
-            ) : (
-              <>
-                <Plus size={20} strokeWidth={2.6} aria-hidden="true" />
-                Add set {composerNumber}
-              </>
-            )}
-          </button>
-        </div>
+            <button
+              onClick={submit}
+              className="flex h-12 flex-1 items-center justify-center gap-2 rounded-[var(--radius-md)] bg-accent font-semibold text-accent-foreground active:brightness-95"
+            >
+              <Check size={20} strokeWidth={2.6} aria-hidden="true" />
+              Save set {composerNumber}
+            </button>
+          </div>
+        )}
       </div>
 
       <DemoSheet

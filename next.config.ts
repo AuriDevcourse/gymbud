@@ -3,6 +3,13 @@ import type { NextConfig } from "next";
 // Content Security Policy. 'unsafe-inline' is required for Next's hydration
 // bootstrap script and Recharts' inline styles; everything else is locked to
 // same-origin (this is a self-hosted, no-CDN app).
+const dev = process.env.NODE_ENV === "development";
+
+// In dev only, let the Agentation feedback toolbar reach its local sync server.
+const connectSrc = dev
+  ? "connect-src 'self' http://localhost:4747 ws://localhost:4747"
+  : "connect-src 'self'";
+
 const csp = [
   "default-src 'self'",
   "base-uri 'self'",
@@ -13,7 +20,7 @@ const csp = [
   "font-src 'self' data:",
   "style-src 'self' 'unsafe-inline'",
   "script-src 'self' 'unsafe-inline'",
-  "connect-src 'self'",
+  connectSrc,
 ].join("; ");
 
 const nextConfig: NextConfig = {

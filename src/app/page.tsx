@@ -1,17 +1,18 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { ChevronRight, Dumbbell, Flame, Scale, TrendingUp } from "lucide-react";
-import { Button, Card, Chip, SectionTitle } from "@/components/ui";
-import { StartSuggested } from "@/components/start-suggested";
-import { suggestWorkout } from "@/lib/coach";
+import { ChevronRight, Dumbbell, Scale, TrendingUp } from "lucide-react";
+import { Card, Chip } from "@/components/ui";
+import { SuggestionCard } from "@/components/suggestion-card";
+import { WeightDelta } from "@/components/weight-delta";
 import {
   activeSession,
   daysSinceByMuscle,
   getProfile,
-  latestBodyWeight,
+  listBodyWeight,
   listSessions,
 } from "@/lib/store";
-import { EQUIPMENT_LABELS, GOAL_LABELS, MUSCLE_LABELS } from "@/lib/types";
+import { weightTrend } from "@/lib/bodyweight";
+import { GOAL_LABELS } from "@/lib/types";
 import { fmtWeight } from "@/lib/format";
 import { relativeDay } from "@/lib/date";
 
@@ -27,20 +28,14 @@ function greeting(): string {
 export default async function Home() {
   const profile = await getProfile();
   if (!profile.onboarded) redirect("/welcome");
-  const [active, bw, sessions, daysSince] = await Promise.all([
+  const [active, bwList, sessions, daysSince] = await Promise.all([
     activeSession(),
-    latestBodyWeight(),
+    listBodyWeight(),
     listSessions(5),
     daysSinceByMuscle(),
   ]);
   const lastDone = sessions.find((s) => s.finishedAt);
-
-  const suggestion = suggestWorkout({
-    goal: profile.goal,
-    daysPerWeek: profile.daysPerWeek,
-    available: profile.equipment,
-    daysSince,
-  });
+  const bwTrend = weightTrend(bwList);
 
   return (
     <div className="flex flex-col gap-5 pb-4">
@@ -66,48 +61,14 @@ export default async function Home() {
         </Link>
       )}
 
-      {/* Suggested workout */}
-      <section>
-        <SectionTitle right={<Chip tone="muted">{suggestion.exercises.length} moves</Chip>}>
-          Today&apos;s suggestion
-        </SectionTitle>
-        <Card>
-          <div className="mb-3 flex items-center gap-2">
-            <Flame size={20} className="text-accent" aria-hidden="true" />
-            <h3 className="display text-xl font-bold">{suggestion.title}</h3>
-          </div>
-          <div className="mb-4 flex flex-wrap gap-1.5">
-            {suggestion.focus.slice(0, 6).map((m) => (
-              <Chip key={m} tone="muted">
-                {MUSCLE_LABELS[m]}
-              </Chip>
-            ))}
-          </div>
-          <ol className="mb-4 flex flex-col">
-            {suggestion.exercises.map((ex, i) => (
-              <li
-                key={ex.id}
-                className="flex items-center gap-3 border-b border-border/60 py-2.5 last:border-0"
-              >
-                <span className="stat-num w-5 text-sm text-muted">{i + 1}</span>
-                <span className="flex-1 font-medium">{ex.name}</span>
-                <Chip tone="muted">{EQUIPMENT_LABELS[ex.equipment]}</Chip>
-              </li>
-            ))}
-          </ol>
-
-          {!active && suggestion.exercises.length > 0 && (
-            <StartSuggested exerciseIds={suggestion.exercises.map((e) => e.id)} />
-          )}
-          {!active && (
-            <Link href="/workout" className="mt-2 block">
-              <Button variant="ghost" className="w-full">
-                Or start an empty workout
-              </Button>
-            </Link>
-          )}
-        </Card>
-      </section>
+      {/* Suggested workout (client: supports Shuffle for variety) */}
+      <SuggestionCard
+        goal={profile.goal}
+        daysPerWeek={profile.daysPerWeek}
+        available={profile.equipment}
+        daysSince={daysSince}
+        hasActive={!!active}
+      />
 
       {/* Quick stats */}
       <section className="grid grid-cols-2 gap-3">
@@ -138,13 +99,19 @@ export default async function Home() {
                 Body weight
               </span>
             </div>
-            {bw ? (
+            {bwTrend.current ? (
               <>
                 <p className="stat-num text-2xl font-bold">
-                  {fmtWeight(bw.weight)}
+                  {fmtWeight(bwTrend.current.weight)}
                   <span className="ml-1 text-base text-muted">{profile.unit}</span>
                 </p>
-                <p className="text-sm text-muted">{relativeDay(bw.loggedAt)}</p>
+                <div className="mt-0.5 flex items-center gap-2">
+                  {bwTrend.delta !== null ? (
+                    <WeightDelta delta={bwTrend.delta} unit={profile.unit} goal={profile.goal} />
+                  ) : (
+                    <p className="text-sm text-muted">{relativeDay(bwTrend.current.loggedAt)}</p>
+                  )}
+                </div>
               </>
             ) : (
               <p className="text-sm text-muted">Tap to log</p>
