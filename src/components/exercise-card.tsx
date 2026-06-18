@@ -1,11 +1,10 @@
 "use client";
 
 import { useEffect, useRef, useState, type MutableRefObject } from "react";
-import { ArrowLeftRight, Dices, Layers, PlayCircle, Trash2 } from "lucide-react";
+import { ArrowLeftRight, Dices, PlayCircle, Trash2 } from "lucide-react";
 import { Stepper } from "./stepper";
 import { CoachBadge } from "./coach-badge";
 import { DemoSheet } from "./demo";
-import { platesPerSide } from "@/lib/plates";
 import { EXERCISES_BY_ID } from "@/lib/exercise-library";
 import {
   EQUIPMENT_LABELS,
@@ -110,13 +109,6 @@ export function ExerciseCard({
           >
             <Dices size={16} aria-hidden="true" />
           </button>
-          <button
-            onClick={onRemove}
-            aria-label="Remove exercise"
-            className="flex h-9 w-9 items-center justify-center rounded-[var(--radius-sm)] border border-border bg-surface-2 text-muted active:bg-surface-3"
-          >
-            <Trash2 size={16} aria-hidden="true" />
-          </button>
         </div>
       </div>
 
@@ -137,7 +129,7 @@ export function ExerciseCard({
       {/* composer FIRST so adding a set (which grows the list below) never
           shifts the controls you're actually using */}
       <RegisterCommit commitRef={commitRef} weight={weight} reps={reps} onAdd={onAddSet} />
-      <div className="px-4 pt-1">
+      <div className="px-4 pb-5 pt-1">
         {/* key by set number so each "Next set" fades in as a fresh window */}
         <div key={se.sets.length} className="animate-fade">
           <p className="text-xs font-semibold uppercase tracking-widest text-accent">
@@ -148,7 +140,7 @@ export function ExerciseCard({
               Last time: {fmtWeight(composerPrev.weight, unit)} × {composerPrev.reps}
             </p>
           )}
-          <div className="mt-3 flex items-end gap-2">
+          <div className="mt-3 flex items-start gap-2">
             <Stepper
               label={isBW ? `Added (${unit})` : `Weight (${unit})`}
               value={weight}
@@ -158,41 +150,36 @@ export function ExerciseCard({
             <Stepper label="Reps" value={reps} onChange={setReps} step={1} min={1} />
           </div>
 
-          {/* fine weight adjust (micro-plates) */}
-          <div className="mt-2 flex items-center justify-center gap-2 text-xs text-muted">
-            <span className="uppercase tracking-wider">Fine</span>
-            <button
-              onClick={() => adjust(-1.25)}
-              aria-label={`Decrease weight by 1.25 ${unit}`}
-              className="stat-num rounded-full border border-border bg-surface-2 px-3 py-1 text-foreground active:bg-surface-3"
-            >
-              −1.25
-            </button>
-            <button
-              onClick={() => adjust(1.25)}
-              aria-label={`Increase weight by 1.25 ${unit}`}
-              className="stat-num rounded-full border border-border bg-surface-2 px-3 py-1 text-foreground active:bg-surface-3"
-            >
-              +1.25
-            </button>
-          </div>
-
-          {(ex.equipment === "barbell" || ex.equipment === "smith") && (
-            <div className="mt-2">
-              <PlateHint weight={weight} unit={unit} />
+          {/* fine weight adjust — sits under the weight column */}
+          <div className="mt-2 flex gap-2">
+            <div className="flex flex-1 justify-center gap-2">
+              <button
+                onClick={() => adjust(-1.25)}
+                aria-label={`Decrease weight by 1.25 ${unit}`}
+                className="stat-num rounded-full border border-border bg-surface-2 px-3 py-1 text-xs text-foreground active:bg-surface-3"
+              >
+                −1.25
+              </button>
+              <button
+                onClick={() => adjust(1.25)}
+                aria-label={`Increase weight by 1.25 ${unit}`}
+                className="stat-num rounded-full border border-border bg-surface-2 px-3 py-1 text-xs text-foreground active:bg-surface-3"
+              >
+                +1.25
+              </button>
             </div>
-          )}
+            <div className="flex-1" aria-hidden="true" />
+          </div>
         </div>
       </div>
 
       {/* done sets — below the composer; swipe a set left to reveal Delete */}
       {se.sets.length > 0 && (
         <div className="border-t border-border/60 p-4">
-          <div className="mb-1.5 flex items-center justify-between">
+          <div className="mb-1.5">
             <span className="text-xs font-semibold uppercase tracking-widest text-muted">
               Done sets
             </span>
-            <span className="text-xs text-muted">swipe left to delete</span>
           </div>
           {/* reserve room for all target rows so logging a set never grows the
               card (which would nudge the buttons below) */}
@@ -212,6 +199,14 @@ export function ExerciseCard({
           </ul>
         </div>
       )}
+
+      {/* low-priority action, tucked at the bottom */}
+      <button
+        onClick={onRemove}
+        className="w-full border-t border-border/60 py-2.5 text-center text-xs text-muted active:text-danger"
+      >
+        Remove this exercise
+      </button>
 
       <DemoSheet
         open={demoOpen}
@@ -317,31 +312,16 @@ function SetRow({
           transition: dragging ? "none" : "transform 0.18s ease",
           touchAction: "pan-y",
         }}
-        className="relative flex select-none items-center gap-2 bg-surface-2 px-2.5 py-2"
+        className="relative flex select-none items-center gap-2 bg-surface-2 px-2.5 py-2.5"
       >
         <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-surface-3 text-[0.65rem] font-bold text-muted-strong">
           {index + 1}
         </span>
-        <span className="stat-num flex-1 truncate text-sm">{label}</span>
+        <span className="stat-num flex-1 truncate text-sm" style={{ lineHeight: 1.35 }}>
+          {label}
+        </span>
       </div>
     </li>
   );
 }
 
-function PlateHint({ weight, unit }: { weight: number; unit: Unit }) {
-  const b = platesPerSide(weight, unit);
-  let text: string;
-  if (b.belowBar) text = "Below bar weight";
-  else if (b.perSide.length === 0) text = "Just the bar";
-  else
-    text =
-      b.perSide.map((p) => fmtWeight(p)).join("  ·  ") +
-      (b.leftover > 0 ? `  (+${fmtWeight(b.leftover, unit)} off)` : "");
-  return (
-    <div className="flex items-center gap-2 text-xs text-muted">
-      <Layers size={13} aria-hidden="true" />
-      <span>Per side</span>
-      <span className="stat-num text-muted-strong">{text}</span>
-    </div>
-  );
-}

@@ -84,10 +84,12 @@ export function DemoImage({
         )}
       </div>
       {meta.instructions && meta.instructions.length > 0 && (
-        <ol className="mt-3 flex flex-col gap-1.5">
+        <ol className="mt-4 flex flex-col gap-3">
           {meta.instructions.slice(0, 6).map((step, i) => (
-            <li key={i} className="flex gap-2 text-sm text-muted-strong">
-              <span className="stat-num shrink-0 text-accent">{i + 1}</span>
+            <li key={i} className="flex gap-3 text-sm leading-relaxed text-muted-strong">
+              <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-surface-3 text-[0.7rem] font-bold text-accent">
+                {i + 1}
+              </span>
               <span>{step}</span>
             </li>
           ))}

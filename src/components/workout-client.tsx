@@ -511,6 +511,9 @@ export function WorkoutClient() {
       ) : (
         se && (
           <>
+            {restOpen && (
+              <RestBar key={restKey} target={restSeconds(goal)} onClose={() => setRestOpen(false)} />
+            )}
             <p className="mb-2 text-xs font-semibold uppercase tracking-widest text-muted">
               Exercise {idx + 1} of {exercises.length}
             </p>
@@ -576,10 +579,6 @@ export function WorkoutClient() {
 
           </>
         )
-      )}
-
-      {restOpen && (
-        <RestBar key={restKey} target={restSeconds(goal)} onClose={() => setRestOpen(false)} />
       )}
 
       {toast && (
@@ -717,10 +716,7 @@ function RestBar({ target, onClose }: { target: number; onClose: () => void }) {
   const pct = Math.max(0, Math.min(1, left / cap));
 
   return (
-    <div
-      className="fixed inset-x-0 z-[60] mx-auto w-full max-w-md px-3"
-      style={{ bottom: "calc(5rem + env(safe-area-inset-bottom))" }}
-    >
+    <div className="mb-3 w-full">
       <div className="animate-slide-up overflow-hidden rounded-[var(--radius-md)] border border-border bg-surface shadow-lg shadow-black/40">
         <div className="h-1 w-full bg-surface-2">
           <div
