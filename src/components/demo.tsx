@@ -72,14 +72,14 @@ export function DemoImage({
         <img
           src={meta.images?.[0]}
           alt={`${name} start position`}
-          className="absolute inset-0 mx-auto h-full w-full object-contain"
+          className="absolute inset-0 h-full w-full object-cover"
         />
         {meta.frames > 1 && meta.images?.[1] && (
           // eslint-disable-next-line @next/next/no-img-element -- public-domain photo from CDN
           <img
             src={meta.images[1]}
             alt={`${name} end position`}
-            className="demo-crossfade absolute inset-0 mx-auto h-full w-full object-contain"
+            className="demo-crossfade absolute inset-0 h-full w-full object-cover"
           />
         )}
       </div>

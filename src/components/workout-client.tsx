@@ -637,7 +637,10 @@ export function WorkoutClient() {
       )}
 
       {toast && (
-        <div className="fixed inset-x-0 bottom-[5rem] z-40 mx-auto flex w-full max-w-md justify-center px-4">
+        <div
+          className="fixed inset-x-0 z-[60] mx-auto flex w-full max-w-md justify-center px-4"
+          style={{ bottom: "calc(5rem + env(safe-area-inset-bottom))" }}
+        >
           <div className="animate-slide-up flex items-center gap-3 rounded-full border border-border bg-surface-2 px-4 py-2.5 text-sm shadow-lg shadow-black/40">
             <span>{toast.msg}</span>
             {toast.undo && (
@@ -748,7 +751,10 @@ function RestBar({ target, onClose }: { target: number; onClose: () => void }) {
   const pct = Math.max(0, Math.min(1, left / cap));
 
   return (
-    <div className="fixed inset-x-0 bottom-[4.75rem] z-40 mx-auto w-full max-w-md px-3">
+    <div
+      className="fixed inset-x-0 z-[60] mx-auto w-full max-w-md px-3"
+      style={{ bottom: "calc(5rem + env(safe-area-inset-bottom))" }}
+    >
       <div className="animate-slide-up overflow-hidden rounded-[var(--radius-md)] border border-border bg-surface shadow-lg shadow-black/40">
         <div className="h-1 w-full bg-surface-2">
           <div

@@ -82,7 +82,13 @@ function bestMatch(ex: Exercise, db: DbEntry[]): DbEntry | null {
         hits++;
       }
     if (hits === 0) continue;
-    if (e.equipment && wantEquip.includes(e.equipment.toLowerCase())) s += 2;
+    // Equipment matters: a dumbbell move should not show a barbell demo. Reward
+    // the right gear, and penalise the wrong gear hard so we'd rather show no
+    // demo than a misleading one.
+    if (e.equipment) {
+      if (wantEquip.includes(e.equipment.toLowerCase())) s += 3;
+      else s -= 4;
+    }
     if (e.primaryMuscles?.some((m) => wantMuscle.includes(m.toLowerCase()))) s += 2;
     for (const t of nameTokens) if (!exSet.has(t) && !STOP.has(t)) s -= 1;
     if (s > bestScore) {

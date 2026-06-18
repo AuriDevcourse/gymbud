@@ -10,8 +10,6 @@ import { EXERCISES_BY_ID } from "@/lib/exercise-library";
 import {
   EQUIPMENT_LABELS,
   MUSCLE_LABELS,
-  SET_TYPE_BADGE,
-  SET_TYPE_LABELS,
   type Recommendation,
   type SessionExercise,
   type SetLog,
@@ -19,8 +17,6 @@ import {
   type Unit,
 } from "@/lib/types";
 import { fmtWeight } from "@/lib/format";
-
-const SET_TYPES: SetType[] = ["normal", "warmup", "drop", "failure"];
 
 export interface LastData {
   last: { date: string; sets: SetLog[] } | null;
@@ -190,14 +186,13 @@ export function ExerciseCard({
             </span>
             <span className="text-xs text-muted">tap to edit, swipe to delete</span>
           </div>
-          <ul className="flex max-h-[8.5rem] flex-col gap-1.5 overflow-y-auto pr-0.5">
+          <ul className="grid max-h-[9rem] grid-cols-2 gap-1.5 overflow-y-auto pr-0.5">
             {se.sets.map((s, i) => (
               <SetRow
                 key={s.id}
                 index={i}
                 set={s}
                 unit={unit}
-                prev={prevFor(i)}
                 editing={s.id === editingId}
                 onEdit={() => startEdit(s)}
                 onDelete={() => {
@@ -230,23 +225,7 @@ export function ExerciseCard({
             Last time: {fmtWeight(composerPrev.weight, unit)} × {composerPrev.reps}
           </p>
         )}
-        <div className="mb-3 mt-2 flex gap-1.5">
-          {SET_TYPES.map((t) => (
-            <button
-              key={t}
-              onClick={() => setSetType(t)}
-              aria-pressed={setType === t}
-              className={`flex-1 rounded-full border px-2 py-1.5 text-[0.7rem] font-medium transition ${
-                setType === t
-                  ? "border-accent bg-accent/10 text-accent"
-                  : "border-border bg-surface-2 text-muted"
-              }`}
-            >
-              {SET_TYPE_LABELS[t]}
-            </button>
-          ))}
-        </div>
-        <div className="flex items-end gap-2">
+        <div className="mt-3 flex items-end gap-2">
           <Stepper
             label={isBW ? `Added (${unit})` : `Weight (${unit})`}
             value={weight}
@@ -318,7 +297,6 @@ function SetRow({
   index,
   set,
   unit,
-  prev,
   editing,
   onEdit,
   onDelete,
@@ -326,7 +304,6 @@ function SetRow({
   index: number;
   set: SetLog;
   unit: Unit;
-  prev?: SetLog;
   editing: boolean;
   onEdit: () => void;
   onDelete: () => void;
@@ -385,27 +362,14 @@ function SetRow({
           transition: dx === 0 ? "transform 0.18s ease" : "none",
           touchAction: "pan-y",
         }}
-        className={`relative flex select-none items-center gap-3 px-3 py-2.5 ${
+        className={`relative flex select-none items-center gap-2 px-2.5 py-2 ${
           editing ? "bg-accent/15" : "bg-surface-2"
         }`}
       >
-        <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-surface-3 text-xs font-bold text-muted-strong">
+        <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-surface-3 text-[0.65rem] font-bold text-muted-strong">
           {index + 1}
         </span>
-        <span className="stat-num flex-1 text-base">{label}</span>
-        {prev && (
-          <span className="text-xs text-muted">
-            prev {fmtWeight(prev.weight, unit)} × {prev.reps}
-          </span>
-        )}
-        {SET_TYPE_BADGE[set.type] && (
-          <span
-            title={SET_TYPE_LABELS[set.type]}
-            className="rounded bg-surface-3 px-1.5 py-0.5 text-[0.65rem] font-bold text-muted-strong"
-          >
-            {SET_TYPE_BADGE[set.type]}
-          </span>
-        )}
+        <span className="stat-num flex-1 truncate text-sm">{label}</span>
       </div>
     </li>
   );

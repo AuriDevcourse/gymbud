@@ -77,6 +77,9 @@ const SCHEMA = `
   INSERT OR IGNORE INTO profile (id) VALUES (1);
 `;
 
+// Bump when the demo-matching algorithm changes, to drop stale (wrong) matches.
+const DEMO_MATCH_VERSION = "2";
+
 async function migrate(c: Client): Promise<void> {
   await c.executeMultiple(SCHEMA);
   // forward-compat for databases created before these columns existed
@@ -89,6 +92,24 @@ async function migrate(c: Client): Promise<void> {
     } catch {
       /* column already exists */
     }
+  }
+
+  // Clear cached demo matches once whenever the matching logic changes.
+  try {
+    const marker = (
+      await c.execute({
+        sql: "SELECT name FROM demo_cache WHERE exercise_id = '__match_version__'",
+      })
+    ).rows[0];
+    if (!marker || String(marker.name) !== DEMO_MATCH_VERSION) {
+      await c.execute("DELETE FROM demo_cache");
+      await c.execute({
+        sql: "INSERT INTO demo_cache (exercise_id, name, missing) VALUES ('__match_version__', ?, 1)",
+        args: [DEMO_MATCH_VERSION],
+      });
+    }
+  } catch {
+    /* non-critical: demos just re-match on next request */
   }
 }
 
