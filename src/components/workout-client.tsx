@@ -586,8 +586,7 @@ export function WorkoutClient() {
                   className="flex-1"
                   onClick={() => commitRef.current?.()}
                 >
-                  <Plus size={18} aria-hidden="true" />
-                  Next set · {setsDone + 1} of {target}
+                  Next set
                 </Button>
               ) : onLast ? (
                 <Button
@@ -807,9 +806,9 @@ const PHASE_CONFIG = {
     skip: "Skip warm-up",
     seconds: 300,
     tips: [
-      "5 min light cardio — bike, row or brisk walk",
-      "Dynamic stretches & mobility for today's muscles",
-      "1–2 light ramp-up sets on your first lift",
+      "5 min light cardio: bike, row or brisk walk",
+      "Dynamic stretches and mobility for today's muscles",
+      "1 to 2 light ramp-up sets on your first lift",
     ],
   },
   cooldown: {
@@ -819,7 +818,7 @@ const PHASE_CONFIG = {
     skip: "Skip cool-down",
     seconds: 180,
     tips: [
-      "3–5 min easy walk or light cardio",
+      "3 to 5 min easy walk or light cardio",
       "Static stretches for the muscles you trained",
       "Slow nasal breathing for a minute",
     ],

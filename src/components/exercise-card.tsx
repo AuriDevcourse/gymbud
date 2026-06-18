@@ -1,9 +1,8 @@
 "use client";
 
-import { useEffect, useState, type MutableRefObject } from "react";
-import { ArrowLeftRight, Check, Layers, Pencil, PlayCircle, Trash2, X } from "lucide-react";
+import { useEffect, useRef, useState, type MutableRefObject } from "react";
+import { ArrowLeftRight, Check, Layers, PlayCircle, Trash2, X } from "lucide-react";
 import { Stepper } from "./stepper";
-import { Chip } from "./ui";
 import { CoachBadge } from "./coach-badge";
 import { DemoSheet } from "./demo";
 import { platesPerSide } from "@/lib/plates";
@@ -123,9 +122,6 @@ export function ExerciseCard({
     onEditingChange?.(!!editingId);
   }, [editingId, onEditingChange]);
 
-  const setLabel = (s: SetLog) =>
-    s.weight > 0 ? `${fmtWeight(s.weight, unit)} × ${s.reps}` : `BW × ${s.reps}`;
-
   // last time's matching set (set N) for the "Previous" hint
   const prevFor = (i: number) => lastData?.last?.sets[i];
   const composerPrev = prevFor(editingId ? editingIndex : se.sets.length);
@@ -136,9 +132,13 @@ export function ExerciseCard({
       <div className="flex items-start justify-between gap-2 p-4 pb-3">
         <div className="min-w-0">
           <h3 className="display truncate text-lg font-semibold">{ex.name}</h3>
-          <div className="mt-1.5 flex flex-wrap gap-1.5">
-            <Chip tone="accent">{MUSCLE_LABELS[ex.muscleGroup]}</Chip>
-            <Chip tone="muted">{EQUIPMENT_LABELS[ex.equipment]}</Chip>
+          <div className="mt-1 flex flex-wrap items-center gap-1.5 text-[0.7rem] font-medium text-muted">
+            <span className="rounded-full bg-surface-2 px-2 py-0.5">
+              {MUSCLE_LABELS[ex.muscleGroup]}
+            </span>
+            <span className="rounded-full bg-surface-2 px-2 py-0.5">
+              {EQUIPMENT_LABELS[ex.equipment]}
+            </span>
           </div>
         </div>
         <div className="flex shrink-0 gap-1">
@@ -166,91 +166,49 @@ export function ExerciseCard({
         </div>
       </div>
 
-      {/* last time + coach target */}
-      {lastData && (
+      {/* last time + coach target (only when there's real history to show) */}
+      {lastData?.last && (
         <div className="mx-4 mb-3 flex items-center justify-between gap-2 rounded-[var(--radius-md)] bg-surface-2 px-3 py-2 text-sm">
           <span className="text-muted">
-            {lastData.last ? (
-              <>
-                Last time:{" "}
-                <span className="text-foreground">
-                  {fmtWeight(topOf(lastData.last.sets).weight, unit)} ×{" "}
-                  {topOf(lastData.last.sets).reps}
-                </span>
-              </>
-            ) : (
-              "First time. Find a working weight"
-            )}
+            Last time:{" "}
+            <span className="text-foreground">
+              {fmtWeight(topOf(lastData.last.sets).weight, unit)} ×{" "}
+              {topOf(lastData.last.sets).reps}
+            </span>
           </span>
           <CoachBadge action={lastData.target.action} />
         </div>
       )}
 
-      {/* logged sets — each set has its own weight x reps; tap to edit */}
-      <div className="px-4">
-        <div className="mb-1.5 flex items-center justify-between">
-          <span className="text-xs font-semibold uppercase tracking-widest text-muted">
-            Sets
-          </span>
-          <span className="text-xs text-muted">weight × reps</span>
-        </div>
-        {se.sets.length === 0 ? (
-          <p className="rounded-[var(--radius-md)] border border-dashed border-border px-3 py-3 text-center text-sm text-muted">
-            No sets yet. Set the weight and reps below, then add your first set.
-          </p>
-        ) : (
-          <ul className="overflow-hidden rounded-[var(--radius-md)] border border-border">
-            {se.sets.map((s, i) => {
-              const editing = s.id === editingId;
-              return (
-                <li
-                  key={s.id}
-                  className={`flex items-center gap-3 border-b border-border/60 px-3 py-2.5 last:border-0 ${
-                    editing ? "bg-accent/10" : "bg-surface-2/40"
-                  }`}
-                >
-                  <span className="flex h-7 w-7 items-center justify-center rounded-full bg-surface-3 text-xs font-bold text-muted-strong">
-                    {i + 1}
-                  </span>
-                  <div className="min-w-0 flex-1">
-                    <span className="stat-num text-lg">{setLabel(s)}</span>
-                    {prevFor(i) && (
-                      <span className="ml-2 text-xs text-muted">
-                        prev {fmtWeight(prevFor(i)!.weight, unit)} × {prevFor(i)!.reps}
-                      </span>
-                    )}
-                  </div>
-                  {SET_TYPE_BADGE[s.type] && (
-                    <span
-                      title={SET_TYPE_LABELS[s.type]}
-                      className="rounded bg-surface-3 px-1.5 py-0.5 text-[0.65rem] font-bold text-muted-strong"
-                    >
-                      {SET_TYPE_BADGE[s.type]}
-                    </span>
-                  )}
-                  <button
-                    onClick={() => startEdit(s)}
-                    aria-label={`Edit set ${i + 1}`}
-                    className="p-1 text-muted hover:text-accent"
-                  >
-                    <Pencil size={15} aria-hidden="true" />
-                  </button>
-                  <button
-                    onClick={() => {
-                      if (editing) cancelEdit();
-                      onDeleteSet(s.id);
-                    }}
-                    aria-label={`Delete set ${i + 1}`}
-                    className="p-1 text-muted hover:text-danger"
-                  >
-                    <Trash2 size={15} aria-hidden="true" />
-                  </button>
-                </li>
-              );
-            })}
+      {/* done sets — compact, capped height so adding more never shifts the
+          composer; tap a set to edit, swipe it left to delete */}
+      {se.sets.length > 0 && (
+        <div className="px-4">
+          <div className="mb-1.5 flex items-center justify-between">
+            <span className="text-xs font-semibold uppercase tracking-widest text-muted">
+              Done sets
+            </span>
+            <span className="text-xs text-muted">tap to edit, swipe to delete</span>
+          </div>
+          <ul className="flex max-h-[8.5rem] flex-col gap-1.5 overflow-y-auto pr-0.5">
+            {se.sets.map((s, i) => (
+              <SetRow
+                key={s.id}
+                index={i}
+                set={s}
+                unit={unit}
+                prev={prevFor(i)}
+                editing={s.id === editingId}
+                onEdit={() => startEdit(s)}
+                onDelete={() => {
+                  if (s.id === editingId) cancelEdit();
+                  onDeleteSet(s.id);
+                }}
+              />
+            ))}
           </ul>
-        )}
-      </div>
+        </div>
+      )}
 
       {(ex.equipment === "barbell" || ex.equipment === "smith") && (
         <div className="mt-2">
@@ -260,6 +218,8 @@ export function ExerciseCard({
 
       {/* composer — clearly labelled for the set you're about to add/edit */}
       <div className="mt-2 border-t border-border/60 p-4">
+        {/* key by set number so each "Next set" slides in like a fresh window */}
+        <div key={editingId ?? composerNumber} className="animate-fade-slide">
         <p className="text-xs font-semibold uppercase tracking-widest text-accent">
           {editingId
             ? `Editing set ${composerNumber}`
@@ -314,6 +274,7 @@ export function ExerciseCard({
             +1.25
           </button>
         </div>
+        </div>
 
         {/* When adding, the "Next set" button lives in the workout bottom bar.
             Editing keeps its own inline Save / Cancel. */}
@@ -349,6 +310,105 @@ export function ExerciseCard({
 
 function topOf(sets: SetLog[]): SetLog {
   return [...sets].sort((a, b) => b.weight - a.weight || b.reps - a.reps)[0];
+}
+
+const DELETE_AT = -80; // px of left-swipe that commits a delete
+
+function SetRow({
+  index,
+  set,
+  unit,
+  prev,
+  editing,
+  onEdit,
+  onDelete,
+}: {
+  index: number;
+  set: SetLog;
+  unit: Unit;
+  prev?: SetLog;
+  editing: boolean;
+  onEdit: () => void;
+  onDelete: () => void;
+}) {
+  const [dx, setDx] = useState(0);
+  const dragging = useRef(false);
+  const startX = useRef(0);
+  const moved = useRef(false);
+
+  const label = set.weight > 0 ? `${fmtWeight(set.weight, unit)} × ${set.reps}` : `BW × ${set.reps}`;
+
+  const onDown = (e: React.PointerEvent) => {
+    dragging.current = true;
+    moved.current = false;
+    startX.current = e.clientX;
+    (e.currentTarget as Element).setPointerCapture?.(e.pointerId);
+  };
+  const onMove = (e: React.PointerEvent) => {
+    if (!dragging.current) return;
+    const d = e.clientX - startX.current;
+    if (Math.abs(d) > 6) moved.current = true;
+    setDx(Math.min(0, Math.max(d, -120))); // only allow swiping left
+  };
+  const onUp = () => {
+    dragging.current = false;
+    if (dx <= DELETE_AT) onDelete();
+    setDx(0);
+  };
+  const onClick = () => {
+    if (!moved.current) onEdit();
+  };
+
+  return (
+    <li className="relative overflow-hidden rounded-[var(--radius-md)]">
+      {/* revealed behind the row as you swipe left */}
+      <div className="absolute inset-0 flex items-center justify-end bg-danger/20 pr-4 text-danger">
+        <Trash2 size={16} aria-hidden="true" />
+      </div>
+      <div
+        role="button"
+        tabIndex={0}
+        aria-label={`Set ${index + 1}, ${label}. Tap to edit.`}
+        onPointerDown={onDown}
+        onPointerMove={onMove}
+        onPointerUp={onUp}
+        onPointerCancel={onUp}
+        onClick={onClick}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            onEdit();
+          }
+        }}
+        style={{
+          transform: `translateX(${dx}px)`,
+          transition: dx === 0 ? "transform 0.18s ease" : "none",
+          touchAction: "pan-y",
+        }}
+        className={`relative flex select-none items-center gap-3 px-3 py-2.5 ${
+          editing ? "bg-accent/15" : "bg-surface-2"
+        }`}
+      >
+        <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-surface-3 text-xs font-bold text-muted-strong">
+          {index + 1}
+        </span>
+        <span className="stat-num flex-1 text-base">{label}</span>
+        {prev && (
+          <span className="text-xs text-muted">
+            prev {fmtWeight(prev.weight, unit)} × {prev.reps}
+          </span>
+        )}
+        {SET_TYPE_BADGE[set.type] && (
+          <span
+            title={SET_TYPE_LABELS[set.type]}
+            className="rounded bg-surface-3 px-1.5 py-0.5 text-[0.65rem] font-bold text-muted-strong"
+          >
+            {SET_TYPE_BADGE[set.type]}
+          </span>
+        )}
+      </div>
+    </li>
+  );
 }
 
 function PlateHint({ weight, unit }: { weight: number; unit: Unit }) {

@@ -56,7 +56,12 @@ export default function RootLayout({
     >
       <body className="min-h-full">
         <NoZoom />
-        <main className="mx-auto w-full max-w-md px-4 pt-5">{children}</main>
+        <main
+          className="mx-auto w-full max-w-md px-4"
+          style={{ paddingTop: "calc(env(safe-area-inset-top) + 1.25rem)" }}
+        >
+          {children}
+        </main>
         <BottomNav />
         {process.env.NODE_ENV === "development" && <Agentation />}
       </body>
