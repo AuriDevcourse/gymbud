@@ -376,6 +376,34 @@ export async function addSet(
   return { id: lastId, sessionExerciseId, setIndex, weight, reps, type };
 }
 
+// Edit a logged set in place (fix a mistyped weight/reps/type).
+export async function updateSet(
+  setId: number,
+  weight: number,
+  reps: number,
+  type: SetLog["type"],
+): Promise<SetLog | null> {
+  await run(
+    "UPDATE set_log SET weight = ?, reps = ?, type = ? WHERE id = ?",
+    [weight, reps, type, setId],
+  );
+  const r = await one(
+    "SELECT id, session_exercise_id, set_index, weight, reps, type FROM set_log WHERE id = ?",
+    [setId],
+  );
+  return r ? toSet(r) : null;
+}
+
+export async function setOwner(setId: number): Promise<number | null> {
+  const r = await one(
+    `SELECT se.session_id AS sid
+     FROM set_log sl JOIN session_exercise se ON se.id = sl.session_exercise_id
+     WHERE sl.id = ?`,
+    [setId],
+  );
+  return r ? num(r.sid) : null;
+}
+
 export async function deleteSet(setId: number): Promise<void> {
   await run("DELETE FROM set_log WHERE id = ?", [setId]);
 }

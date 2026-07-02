@@ -42,6 +42,7 @@ export function Stepper({
             inputMode="decimal"
             aria-label={label}
             value={Number.isFinite(value) ? value : 0}
+            onFocus={(e) => e.currentTarget.select()}
             onChange={(e) => set(parseFloat(e.target.value) || 0)}
             className={`stat-num h-12 w-full rounded-[var(--radius-md)] border border-border bg-background text-center text-2xl font-bold text-foreground outline-none focus:border-accent ${
               suffix ? "pr-7" : ""

@@ -11,6 +11,7 @@ import {
   Loader2,
   Plus,
   Snowflake,
+  StickyNote,
   Timer,
   Undo2,
   X,
@@ -102,6 +103,55 @@ function celebrate(intense = false) {
 
 const ACTIVE_KEY = "active-session";
 
+// Per-session UI state that must survive leaving /workout (it isn't a nav tab,
+// so navigating away unmounts this component). Kept in sessionStorage so the
+// exercise you were on and a running rest timer are restored on return.
+const posKey = (id: number) => `gymbud:pos:${id}`;
+const restKeyFor = (id: number) => `gymbud:rest:${id}`;
+const store = {
+  get(k: string): string | null {
+    try {
+      return sessionStorage.getItem(k);
+    } catch {
+      return null;
+    }
+  },
+  set(k: string, v: string) {
+    try {
+      sessionStorage.setItem(k, v);
+    } catch {
+      /* private mode / quota */
+    }
+  },
+  del(k: string) {
+    try {
+      sessionStorage.removeItem(k);
+    } catch {
+      /* ignore */
+    }
+  },
+};
+
+// Seed the exercise index / rest timer from storage for the session we already
+// have cached (in-app navigation), so returning to /workout doesn't flash back
+// to exercise 1. On a full reload the cache is empty here and restore happens
+// once the active session is fetched (see the mount effect).
+function initialPos(): number {
+  const s = peek<Session>(ACTIVE_KEY);
+  if (!s) return 0;
+  const p = store.get(posKey(s.id));
+  const n = p ? parseInt(p, 10) : NaN;
+  return Number.isFinite(n) ? n : 0;
+}
+function initialRest(): number | null {
+  const s = peek<Session>(ACTIVE_KEY);
+  if (!s) return null;
+  const r = store.get(restKeyFor(s.id));
+  if (r === null) return null;
+  const ends = parseInt(r, 10);
+  return Number.isFinite(ends) && ends > Date.now() ? ends : null;
+}
+
 export function WorkoutClient() {
   const router = useRouter();
 
@@ -120,11 +170,11 @@ export function WorkoutClient() {
   const [loaded, setLoaded] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const [current, setCurrent] = useState(0);
+  const [current, setCurrent] = useState(initialPos);
   const [lastMap, setLastMap] = useState<Record<string, LastData>>({});
   const [pickerOpen, setPickerOpen] = useState(false);
-  const [restKey, setRestKey] = useState(0);
-  const [restOpen, setRestOpen] = useState(false);
+  const [restEndsAt, setRestEndsAt] = useState<number | null>(initialRest); // wall-clock end
+  const [noteOpen, setNoteOpen] = useState(false);
   const [toast, setToast] = useState<{ msg: string; undo?: () => void } | null>(null);
 
   const [finishOpen, setFinishOpen] = useState(false);
@@ -191,6 +241,21 @@ export function WorkoutClient() {
         if (cancelled) return;
         setSession(s);
         setLoaded(true);
+        // full reload: the in-memory cache was empty, so restore the exercise
+        // index + running rest timer from storage now that we know the session.
+        if (s) {
+          const p = store.get(posKey(s.id));
+          if (p !== null) {
+            const n = parseInt(p, 10);
+            if (Number.isFinite(n)) setCurrent(n);
+          }
+          const r = store.get(restKeyFor(s.id));
+          if (r !== null) {
+            const ends = parseInt(r, 10);
+            if (Number.isFinite(ends) && ends > Date.now()) setRestEndsAt(ends);
+            else store.del(restKeyFor(s.id));
+          }
+        }
       })
       .catch((e) => {
         if (!cancelled) {
@@ -207,6 +272,11 @@ export function WorkoutClient() {
   useEffect(() => {
     poke(ACTIVE_KEY, session);
   }, [session]);
+
+  // Persist which exercise you're on so a return trip lands where you left off.
+  useEffect(() => {
+    if (session) store.set(posKey(session.id), String(current));
+  }, [current, session]);
 
   // fetch (cached) "last time" for any exercise we don't have yet
   useEffect(() => {
@@ -331,8 +401,9 @@ export function WorkoutClient() {
       ),
     }));
     celebrate(false);
-    setRestKey((k) => k + 1);
-    setRestOpen(true);
+    const ends = Date.now() + restSeconds(goal) * 1000;
+    setRestEndsAt(ends);
+    if (session) store.set(restKeyFor(session.id), String(ends));
     try {
       const real = await api<SetLog & { pr?: boolean }>(
         `/api/session-exercises/${se.id}/sets`,
@@ -391,6 +462,51 @@ export function WorkoutClient() {
     }
   };
 
+  const closeRest = () => {
+    setRestEndsAt(null);
+    if (session) store.del(restKeyFor(session.id));
+  };
+
+  // Edit a logged set in place (fix a mistyped weight/reps/type). Optimistic.
+  const editSet = async (
+    se: SessionExercise,
+    setId: number,
+    weight: number,
+    reps: number,
+    type: SetType,
+  ) => {
+    const prev = se.sets.find((x) => x.id === setId);
+    if (!prev) return;
+    patch((s) => ({
+      ...s,
+      exercises: s.exercises.map((e) =>
+        e.id === se.id
+          ? { ...e, sets: e.sets.map((x) => (x.id === setId ? { ...x, weight, reps, type } : x)) }
+          : e,
+      ),
+    }));
+    try {
+      const real = await api<SetLog>(`/api/sets/${setId}`, {
+        method: "PATCH",
+        body: JSON.stringify({ weight, reps, type }),
+      });
+      patch((s) => ({
+        ...s,
+        exercises: s.exercises.map((e) =>
+          e.id === se.id ? { ...e, sets: e.sets.map((x) => (x.id === setId ? real : x)) } : e,
+        ),
+      }));
+    } catch (e) {
+      patch((s) => ({
+        ...s,
+        exercises: s.exercises.map((el) =>
+          el.id === se.id ? { ...el, sets: el.sets.map((x) => (x.id === setId ? prev : x)) } : el,
+        ),
+      }));
+      setError((e as Error).message);
+    }
+  };
+
   const finish = async () => {
     if (!session) return;
     setBusy(true);
@@ -400,6 +516,9 @@ export function WorkoutClient() {
         body: JSON.stringify({ finish: true }),
       });
       poke(ACTIVE_KEY, null);
+      store.del(posKey(session.id));
+      store.del(restKeyFor(session.id));
+      setRestEndsAt(null);
       const res = await api<{ recommendations: RecRow[] }>(
         `/api/sessions/${session.id}/recommendations`,
       );
@@ -431,10 +550,12 @@ export function WorkoutClient() {
 
   const saveNote = async (note: string) => {
     if (!session) return;
+    const clean = note.trim() || null;
+    patch((s) => ({ ...s, note: clean }));
     try {
       await api(`/api/sessions/${session.id}`, {
         method: "PATCH",
-        body: JSON.stringify({ note: note || null }),
+        body: JSON.stringify({ note: clean }),
       });
     } catch {
       /* non-critical */
@@ -522,6 +643,15 @@ export function WorkoutClient() {
         </div>
         <div className="flex shrink-0 items-center gap-2 text-muted">
           <ElapsedTimer startedAt={session.startedAt} />
+          <button
+            onClick={() => setNoteOpen(true)}
+            aria-label={session.note ? "Edit session note" : "Add session note"}
+            className={`flex h-9 w-9 items-center justify-center rounded-[var(--radius-sm)] border border-border bg-surface-2 active:bg-surface-3 ${
+              session.note ? "text-accent" : "text-muted"
+            }`}
+          >
+            <StickyNote size={16} aria-hidden="true" />
+          </button>
           <Button variant="surface" size="sm" onClick={() => setPhase("cooldown")} disabled={busy}>
             {busy ? <Loader2 size={15} className="animate-spin" /> : <Flag size={15} />}
             Finish
@@ -553,8 +683,16 @@ export function WorkoutClient() {
       ) : (
         se && (
           <>
-            {restOpen && (
-              <RestBar key={restKey} target={restSeconds(goal)} onClose={() => setRestOpen(false)} />
+            {restEndsAt && (
+              <RestBar
+                endsAt={restEndsAt}
+                total={restSeconds(goal)}
+                onChange={(end) => {
+                  setRestEndsAt(end);
+                  if (session) store.set(restKeyFor(session.id), String(end));
+                }}
+                onClose={closeRest}
+              />
             )}
             <p className="mb-2 text-xs font-semibold uppercase tracking-widest text-muted">
               Exercise {idx + 1} of {exercises.length}
@@ -563,11 +701,13 @@ export function WorkoutClient() {
               <ExerciseCard
                 se={se}
                 unit={unit}
+                goal={goal}
                 lastData={lastMap[se.exerciseId]}
                 targetSets={target}
                 commitRef={commitRef}
                 onAddSet={(w, r, t) => addSet(se, w, r, t)}
                 onDeleteSet={(id) => deleteSet(se, id)}
+                onEditSet={(id, w, r, t) => editSet(se, id, w, r, t)}
                 onSwap={() => setSwapOpen(true)}
                 onRandomize={() => cycleSwap(se)}
                 onRemove={() => removeExercise(se)}
@@ -667,6 +807,16 @@ export function WorkoutClient() {
         </ul>
       </Sheet>
 
+      <Sheet open={noteOpen} onClose={() => setNoteOpen(false)} title="Session note">
+        <NoteEditor
+          initial={session.note ?? ""}
+          onSave={(n) => {
+            saveNote(n);
+            setNoteOpen(false);
+          }}
+        />
+      </Sheet>
+
       <Sheet open={finishOpen} onClose={closeSummary} title="Session done">
         <FinishSummary
           exercises={session.exercises}
@@ -679,6 +829,28 @@ export function WorkoutClient() {
           Done
         </Button>
       </Sheet>
+    </div>
+  );
+}
+
+// Mid-session note editor: jot down how it's going without waiting for the end.
+function NoteEditor({ initial, onSave }: { initial: string; onSave: (n: string) => void }) {
+  const [text, setText] = useState(initial);
+  return (
+    <div>
+      <textarea
+        rows={4}
+        maxLength={500}
+        value={text}
+        autoFocus
+        onChange={(e) => setText(e.target.value)}
+        placeholder="Felt strong, shoulder a bit tight..."
+        className="w-full resize-none rounded-[var(--radius-md)] border border-border bg-background px-3 py-2 text-sm outline-none focus:border-accent"
+      />
+      <Button variant="accent" size="lg" className="mt-3 w-full" onClick={() => onSave(text)}>
+        <CheckCircle2 size={18} aria-hidden="true" />
+        Save note
+      </Button>
     </div>
   );
 }
@@ -775,7 +947,14 @@ function ElapsedTimer({ startedAt }: { startedAt: string }) {
     const tick = () => setNow(Date.now());
     tick();
     const t = setInterval(tick, 1000);
-    return () => clearInterval(t);
+    const onVis = () => {
+      if (!document.hidden) tick();
+    };
+    document.addEventListener("visibilitychange", onVis);
+    return () => {
+      clearInterval(t);
+      document.removeEventListener("visibilitychange", onVis);
+    };
   }, []);
   const secs = Math.max(0, Math.floor((now - start) / 1000));
   return (
@@ -786,20 +965,58 @@ function ElapsedTimer({ startedAt }: { startedAt: string }) {
   );
 }
 
-function RestBar({ target, onClose }: { target: number; onClose: () => void }) {
-  const [left, setLeft] = useState(target);
-  const [cap, setCap] = useState(target);
-  useEffect(() => {
-    const t = setInterval(() => setLeft((l) => l - 1), 1000);
-    return () => clearInterval(t);
-  }, []);
-  useEffect(() => {
-    if (left === 0 && typeof navigator !== "undefined" && navigator.vibrate) {
-      navigator.vibrate(180);
-    }
-  }, [left]);
+// Wall-clock rest countdown: derives the time left from a target end timestamp
+// (not by decrementing a counter), so it stays correct after the tab is
+// backgrounded or you leave and return to the workout.
+function RestBar({
+  endsAt,
+  total,
+  onChange,
+  onClose,
+}: {
+  endsAt: number;
+  total: number; // the goal's rest length, used as the progress-bar denominator
+  onChange: (end: number) => void;
+  onClose: () => void;
+}) {
+  const [end, setEnd] = useState(endsAt);
+  const [now, setNow] = useState(nowMs);
+  const [cap, setCap] = useState(Math.max(1, total));
+  const vibratedRef = useRef(false);
 
+  useEffect(() => {
+    const tick = () => setNow(nowMs());
+    tick();
+    const t = setInterval(tick, 1000);
+    // snap back to the right time the moment the app becomes visible again
+    const onVis = () => {
+      if (!document.hidden) tick();
+    };
+    document.addEventListener("visibilitychange", onVis);
+    return () => {
+      clearInterval(t);
+      document.removeEventListener("visibilitychange", onVis);
+    };
+  }, []);
+
+  const left = Math.max(0, Math.round((end - now) / 1000));
   const done = left <= 0;
+
+  useEffect(() => {
+    if (done && !vibratedRef.current) {
+      vibratedRef.current = true;
+      if (typeof navigator !== "undefined" && navigator.vibrate) navigator.vibrate(180);
+    }
+    if (!done) vibratedRef.current = false;
+  }, [done]);
+
+  const adjust = (delta: number) => {
+    const ne = end + delta * 1000;
+    setEnd(ne);
+    if (delta > 0) setCap((c) => c + delta); // grow the bar's full mark
+    onChange(ne);
+  };
+
   const pct = Math.max(0, Math.min(1, left / cap));
 
   return (
@@ -819,17 +1036,13 @@ function RestBar({ target, onClose }: { target: number; onClose: () => void }) {
           </span>
           <div className="ml-auto flex items-center gap-1.5">
             <button
-              onClick={() => setLeft((l) => Math.max(0, l - 15))}
+              onClick={() => adjust(-15)}
               className="rounded-md border border-border bg-surface-2 px-2 py-1 text-xs"
             >
               -15
             </button>
             <button
-              onClick={() => {
-                const nl = left + 15;
-                setLeft(nl);
-                setCap((c) => Math.max(c, nl)); // grow the bar's full mark
-              }}
+              onClick={() => adjust(15)}
               className="rounded-md border border-border bg-surface-2 px-2 py-1 text-xs"
             >
               +15
@@ -846,6 +1059,11 @@ function RestBar({ target, onClose }: { target: number; onClose: () => void }) {
       </div>
     </div>
   );
+}
+
+// wall-clock reader, kept out of render so the purity lint stays happy
+function nowMs(): number {
+  return Date.now();
 }
 
 function fmtClock(secs: number): string {

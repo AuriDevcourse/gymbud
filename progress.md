@@ -1,5 +1,74 @@
 # GymBud — Session Handoff
 
+## SESSION 2026-07-02 (part 4) — relative-date bug fix (branch `fix/workout-ux-batch`)
+One-line state: fixed "workout done yesterday shows as Today." Lint + build clean; logic proven with a node check.
+
+Context: Auri asked if workouts persist (they do — DB/Turso, unaffected by the sessionStorage UI-state changes). But the relative-date DISPLAY was wrong.
+- Bug: `relativeDay` (and home `shortAgo`, and the coach `daysAgo`) computed `floor((now - then)/86.4M)` = ELAPSED HOURS, not calendar days. A workout at 20:00 yesterday viewed at 09:00 today = ~13h -> 0 -> "Today" (wrong). Only flips to "Yesterday" after a full 24h.
+- Fix: `date.ts` new `calendarDaysAgo(s)` compares LOCAL midnight of each date (`localDayStart`). `relativeDay` now uses it; `page.tsx#shortAgo` and `api/coach/route.ts#daysAgo` switched to it too.
+- Proven: node check — last-night workout now reads 1 day ("Yesterday") vs old 0 ("Today"). Matches the memory lesson about UTC storage + always parsing via `parseDbDate`.
+- NOTE: persistence itself was never broken; sessions are stored server-side via `datetime('now')` (UTC) and parsed to local. Only the human-readable "how long ago" label was off.
+
+---
+
+## SESSION 2026-07-02 (part 3) — prescription-first workout card (branch `fix/workout-ux-batch`)
+One-line state: reframed the app from "logs what you did" to "tells you what to do." New `Prescription` banner is the loud top of each exercise card. Lint + build clean; data flow verified live (:3002).
+
+Why: Auri doesn't care about the stored history. The app's reason to exist is removing decisions at the gym, not record-keeping. The coach logic already computed the target; it was just whispering.
+
+What was done:
+- `exercise-card.tsx`: new `Prescription` component replaces the quiet "last time + badge" row. Two states:
+  - **No history** (`lastData.last == null`, target action "start"): a "Test set" banner (FlaskConical) telling you to pick a weight for the goal's rep range and log it (calibration baseline).
+  - **Has history**: big lime suggested weight + "aim {low} to {high} reps" + `CoachBadge` (Add/Same/Drop weight) + "Last time: WxR" footnote. Dropped the coach `reason` string here (it's written "next session" tense, wrong for a do-it-now banner; badge + number say it).
+- `goal` now passed `WorkoutClient -> ExerciseCard` (needed for `REP_RANGE`).
+- Data flow relies on existing `/api/exercises/[id]/last` which runs `recommendNext(lastWorkingSets, [], goal, unit, lastDifficulty)` -> real increase/maintain/back_off + suggestedWeight.
+
+Verified live: first call -> last=null/action=start (Test set); after logging 60x12 (muscle_gain 8-12, top of range) -> last=60x12, action=increase, suggested=62.5. Stepper already prefills suggestedWeight so tapping "Next set" logs the prescribed load.
+
+Direction note (agreed with Auri): de-emphasise analytics/history UI (they don't care), keep the DB. The app should answer "what do I do right now" first. Routines are now SECONDARY to this.
+
+---
+
+## SESSION 2026-07-02 (part 2) — short-workout mode + AI coach context (branch `fix/workout-ux-batch`)
+One-line state: two features added on the same branch; lint + build clean; coach route verified graceful (503 no-key / 422 bad input). Committed after the bug batch. Short-workout is client-only (fully testable); AI personalization needs `GEMINI_API_KEY` (on Vercel) for a live check.
+
+What was done:
+1. **Short / time-boxed workouts (#8)** — `coach.ts`: new `WorkoutLength = short|medium|long` + `LENGTH_LABELS` (~30/45/60 min) + `LENGTH_COUNT {4,6,8}` (fat_loss +1). `suggestWorkout` takes `length` (default "medium" = old behavior, no regression); `selectExercises` now takes `maxCount`. `suggestion-card.tsx`: a Clock length selector row above the focus chips.
+2. **AI Coach sees your data** — `api/coach/route.ts`: new `trainingContext()` builds a compact snapshot (profile goal/days/units/equipment, latest bodyweight, streak + week sets, last 3 finished sessions with the top working set per exercise) and appends it to the system prompt. Best-effort (try/catch → "" so the coach still works if the DB read fails). Was previously context-blind.
+
+Gotchas:
+- Coach personalization only shows with `GEMINI_API_KEY` set (Vercel has it; local .env.local does not) — verify the personalized answers once deployed.
+- Privacy: the LLM (Google) now receives the user's own training data. Fine for a single-user personal app; add a short privacy note if this ever serves other people.
+
+Next steps: unchanged from below (routines is the big one; passcode lock is Auri's Vercel action — see commands in chat).
+
+---
+
+## SESSION 2026-07-02 — real-usage bug batch (branch `fix/workout-ux-batch`, NOT committed)
+One-line state: 8 of 9 reported bugs fixed on branch `fix/workout-ux-batch`; `npm run lint` + `npm run build` clean, set-edit flow verified live on dev (:3002). Not committed, not pushed.
+
+What was done this session (from real phone-usage feedback):
+1. **Mid-session notes** — `StickyNote` button in the workout header opens a `NoteEditor` sheet; saves anytime via existing PATCH note (turns lime when a note exists). Finish-screen note still works. `workout-client.tsx`.
+2. **Weight field select-on-focus** — `stepper.tsx` input now `onFocus={e=>e.currentTarget.select()}` so you type e.g. 14 straight over 20 (steps are 2.5, couldn't land on 14 before).
+3+5. **Position + rest persist across leaving /workout** — root cause: `/workout` is NOT a bottom-nav tab, so navigating away unmounts `WorkoutClient` and wipes `current` (→ exercise 1) + rest timer. Now persisted in `sessionStorage` (`gymbud:pos:<id>`, `gymbud:rest:<id>`), seeded via `initialPos`/`initialRest` (peek cache) for in-app nav and restored in the `/api/sessions/active` `.then` for full reloads. Cleared on finish.
+4. **Edit a logged set** — tap any set row to open an editor (weight/reps/type or delete). New `PATCH /api/sets/[id]` → `store.updateSet` (+ `store.setOwner` helper). `SetRow` distinguishes tap vs swipe via a `moved` ref. `exercise-card.tsx`, `sets/[id]/route.ts`, `store.ts`.
+6. **Wall-clock timers** — `RestBar` rewritten to derive time-left from a target end timestamp (props `endsAt`, `total`), not a decrementing counter; `visibilitychange` snaps on return. `ElapsedTimer` also snaps on visibility. Fixes "timer frozen when phone locked". NOTE: `PhaseTimer` (warm-up/cool-down) still tick-based — intentionally left (off by default, cosmetic).
+7. **Set counter** — `exercise-card.tsx` counts working sets only (`type !== 'warmup'`), caps at target, shows "Extra set" past target. No more "5 of 4".
+9. **Fetch resilience** — `format.ts#api` retries GETs (3x, backoff) on network error / 5xx / 429; surfaces "Couldn't reach the server" instead of raw "Failed to fetch" (the "fail to load" banner).
+
+Gotcha hit this session: React 19 eslint (`react-hooks/purity`, `refs`, `set-state-in-effect`) rejects `Date.now()` in `useRef`/render, ref reads during render, and sync `setState` in an effect body. Fixes: cap is state (not ref) + `total` prop; `nowMs()` helper; restore logic moved out of a bare effect into useState initializers + the fetch `.then` callback.
+
+NEXT STEPS (numbered):
+1. Review on phone (`npm run dev`, Agentation dev-only), then commit the branch + merge (do NOT push straight to `main` — auto-deploys to Vercel).
+2. **#8 short / one-hour workout mode** — deferred; build WITH routines (touches `coach.ts#suggestWorkout` + `suggestion-card.tsx` + a duration picker).
+3. **Lock `APP_PASSCODE` on Vercel + rotate Turso/Gemini creds** — app is likely still OPEN to anyone with the URL (carried from prior handoff, still not done).
+4. **Routines/templates** (long-standing #1 backlog).
+5. **Feed AI Coach the user's real history/goal** — `api/coach/route.ts` currently sends only the raw question (context-blind).
+
+Files touched: `src/components/{workout-client,exercise-card,stepper}.tsx`, `src/lib/{store,format}.ts`, `src/app/api/sets/[id]/route.ts`.
+
+---
+
 ## SESSION 2026-06-18 — UX batch (9 changes, all built + runtime-checked on dev)
 One-line state: 9 requested changes done on local dev (`npm run dev`), compiled clean, NOT yet committed/pushed.
 

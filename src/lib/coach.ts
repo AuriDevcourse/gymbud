@@ -185,6 +185,19 @@ export const FOCUS_LABELS: Record<WorkoutFocus, string> = {
   legs: "Legs",
 };
 
+// How much time you have. Drives how many exercises the suggestion picks so a
+// time-boxed day (e.g. "only an hour") gets a shorter, compound-first session.
+export type WorkoutLength = "short" | "medium" | "long";
+
+export const LENGTH_LABELS: Record<WorkoutLength, string> = {
+  short: "~30 min",
+  medium: "~45 min",
+  long: "~60 min",
+};
+
+// base exercise count per length; fat-loss adds one (more, lighter movements)
+const LENGTH_COUNT: Record<WorkoutLength, number> = { short: 4, medium: 6, long: 8 };
+
 const FOCUS_MUSCLES: Record<Exclude<WorkoutFocus, "auto">, MuscleGroup[]> = {
   full_body: ["quads", "back", "chest", "shoulders", "hamstrings", "core"],
   upper: ["back", "chest", "shoulders", "biceps", "triceps"],
@@ -214,6 +227,7 @@ export function suggestWorkout(opts: {
   daysSince: Partial<Record<MuscleGroup, number>>; // days since each muscle trained
   seed?: number; // 0 = canonical pick; any other value = a randomized variation
   focus?: WorkoutFocus; // explicit user choice; "auto"/undefined = decide below
+  length?: WorkoutLength; // how much time you have; defaults to "medium"
 }): Suggestion {
   const available = opts.available ?? [];
   const staleness = (m: MuscleGroup) => opts.daysSince[m] ?? 999;
@@ -249,7 +263,9 @@ export function suggestWorkout(opts: {
     focus = [...BUCKETS[pick]];
   }
 
-  const exercises = selectExercises(focus, available, opts.goal, opts.seed ?? 0);
+  const length = opts.length ?? "medium";
+  const maxCount = LENGTH_COUNT[length] + (opts.goal === "fat_loss" ? 1 : 0);
+  const exercises = selectExercises(focus, available, opts.seed ?? 0, maxCount);
   return { title, focus, exercises };
 }
 
@@ -265,10 +281,9 @@ function makeRng(seed: number): () => number {
 function selectExercises(
   muscles: MuscleGroup[],
   available: Equipment[],
-  goal: Goal,
   seed: number,
+  maxCount: number,
 ): Exercise[] {
-  const maxCount = goal === "fat_loss" ? 7 : 6;
   const picked: Exercise[] = [];
   const rng = makeRng(seed);
 
