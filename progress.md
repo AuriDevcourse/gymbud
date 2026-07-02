@@ -1,5 +1,16 @@
 # GymBud — Session Handoff
 
+## SESSION 2026-07-02 (part 4) — relative-date bug fix (branch `fix/workout-ux-batch`)
+One-line state: fixed "workout done yesterday shows as Today." Lint + build clean; logic proven with a node check.
+
+Context: Auri asked if workouts persist (they do — DB/Turso, unaffected by the sessionStorage UI-state changes). But the relative-date DISPLAY was wrong.
+- Bug: `relativeDay` (and home `shortAgo`, and the coach `daysAgo`) computed `floor((now - then)/86.4M)` = ELAPSED HOURS, not calendar days. A workout at 20:00 yesterday viewed at 09:00 today = ~13h -> 0 -> "Today" (wrong). Only flips to "Yesterday" after a full 24h.
+- Fix: `date.ts` new `calendarDaysAgo(s)` compares LOCAL midnight of each date (`localDayStart`). `relativeDay` now uses it; `page.tsx#shortAgo` and `api/coach/route.ts#daysAgo` switched to it too.
+- Proven: node check — last-night workout now reads 1 day ("Yesterday") vs old 0 ("Today"). Matches the memory lesson about UTC storage + always parsing via `parseDbDate`.
+- NOTE: persistence itself was never broken; sessions are stored server-side via `datetime('now')` (UTC) and parsed to local. Only the human-readable "how long ago" label was off.
+
+---
+
 ## SESSION 2026-07-02 (part 3) — prescription-first workout card (branch `fix/workout-ux-batch`)
 One-line state: reframed the app from "logs what you did" to "tells you what to do." New `Prescription` banner is the loud top of each exercise card. Lint + build clean; data flow verified live (:3002).
 

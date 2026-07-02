@@ -8,12 +8,12 @@ import {
 } from "@/lib/store";
 import { EXERCISES_BY_ID } from "@/lib/exercise-library";
 import { EQUIPMENT_LABELS, GOAL_LABELS } from "@/lib/types";
-import { parseDbDate } from "@/lib/date";
+import { calendarDaysAgo } from "@/lib/date";
 
 export const dynamic = "force-dynamic";
 
 function daysAgo(s: string): string {
-  const d = Math.floor((Date.now() - parseDbDate(s).getTime()) / 86_400_000);
+  const d = calendarDaysAgo(s);
   if (d <= 0) return "today";
   if (d === 1) return "yesterday";
   return `${d} days ago`;

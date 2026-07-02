@@ -14,7 +14,7 @@ import {
 } from "@/lib/store";
 import { weightTrend } from "@/lib/bodyweight";
 import { fmtWeight } from "@/lib/format";
-import { parseDbDate } from "@/lib/date";
+import { calendarDaysAgo } from "@/lib/date";
 
 export const dynamic = "force-dynamic";
 
@@ -111,7 +111,7 @@ export default async function Home() {
 }
 
 function shortAgo(s: string): string {
-  const days = Math.floor((Date.now() - parseDbDate(s).getTime()) / 86_400_000);
+  const days = calendarDaysAgo(s);
   if (days <= 0) return "today";
   return `${days}d`;
 }
