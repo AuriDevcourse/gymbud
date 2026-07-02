@@ -5,10 +5,13 @@ import { ArrowLeftRight, Dices, PlayCircle, Trash2 } from "lucide-react";
 import { Stepper } from "./stepper";
 import { CoachBadge } from "./coach-badge";
 import { DemoSheet } from "./demo";
+import { Sheet } from "./sheet";
+import { Button } from "./ui";
 import { EXERCISES_BY_ID } from "@/lib/exercise-library";
 import {
   EQUIPMENT_LABELS,
   MUSCLE_LABELS,
+  SET_TYPE_LABELS,
   type Recommendation,
   type SessionExercise,
   type SetLog,
@@ -30,6 +33,7 @@ export function ExerciseCard({
   commitRef,
   onAddSet,
   onDeleteSet,
+  onEditSet,
   onSwap,
   onRandomize,
   onRemove,
@@ -43,6 +47,7 @@ export function ExerciseCard({
   commitRef: MutableRefObject<(() => void) | null>;
   onAddSet: (weight: number, reps: number, type: SetType) => void;
   onDeleteSet: (setId: number) => void;
+  onEditSet: (setId: number, weight: number, reps: number, type: SetType) => void;
   onSwap: () => void;
   onRandomize: () => void;
   onRemove: () => void;
@@ -50,6 +55,18 @@ export function ExerciseCard({
   const ex = EXERCISES_BY_ID[se.exerciseId];
   const isBW = ex?.equipment === "bodyweight";
   const step = unit === "kg" ? 2.5 : 5;
+
+  // set being edited (tap a logged set to fix a mistake)
+  const [editing, setEditing] = useState<SetLog | null>(null);
+  const [eW, setEW] = useState(0);
+  const [eR, setER] = useState(0);
+  const [eT, setET] = useState<SetType>("normal");
+  const openEdit = (s: SetLog) => {
+    setEditing(s);
+    setEW(s.weight);
+    setER(s.reps);
+    setET(s.type);
+  };
 
   // Prefill the composer from this exercise's last set, else last time / coach.
   const lastThisSession = se.sets[se.sets.length - 1];
@@ -69,8 +86,12 @@ export function ExerciseCard({
 
   if (!ex) return null;
 
-  const composerNumber = se.sets.length + 1;
-  const composerPrev = lastData?.last?.sets[se.sets.length];
+  // Count only working sets against the target so a warm-up doesn't inflate the
+  // "Set N of M" label, and never show a number past the target (no "5 of 4").
+  const workingDone = se.sets.filter((s) => s.type !== "warmup").length;
+  const overTarget = workingDone >= targetSets;
+  const composerNumber = Math.min(workingDone + 1, targetSets);
+  const composerPrev = lastData?.last?.sets[workingDone];
 
   return (
     <div className="rounded-[var(--radius-lg)] border border-border bg-surface">
@@ -133,7 +154,7 @@ export function ExerciseCard({
         {/* key by set number so each "Next set" fades in as a fresh window */}
         <div key={se.sets.length} className="animate-fade">
           <p className="text-xs font-semibold uppercase tracking-widest text-accent">
-            Set {composerNumber} of {targetSets}
+            {overTarget ? "Extra set" : `Set ${composerNumber} of ${targetSets}`}
           </p>
           {composerPrev && (
             <p className="mb-2 mt-0.5 text-xs text-muted">
@@ -178,7 +199,7 @@ export function ExerciseCard({
         <div className="border-t border-border/60 p-4">
           <div className="mb-1.5">
             <span className="text-xs font-semibold uppercase tracking-widest text-muted">
-              Done sets
+              Done sets · tap to edit
             </span>
           </div>
           {/* reserve room for all target rows so logging a set never grows the
@@ -193,6 +214,7 @@ export function ExerciseCard({
                 index={i}
                 set={s}
                 unit={unit}
+                onEdit={() => openEdit(s)}
                 onDelete={() => onDeleteSet(s.id)}
               />
             ))}
@@ -214,6 +236,62 @@ export function ExerciseCard({
         exerciseId={ex.id}
         name={ex.name}
       />
+
+      <Sheet open={!!editing} onClose={() => setEditing(null)} title="Edit set">
+        {editing && (
+          <div>
+            <div className="flex items-start gap-2">
+              <Stepper
+                label={isBW ? `Added (${unit})` : `Weight (${unit})`}
+                value={eW}
+                onChange={setEW}
+                step={step}
+              />
+              <Stepper label="Reps" value={eR} onChange={setER} step={1} min={1} />
+            </div>
+            <div className="mt-3 flex gap-1.5">
+              {(Object.keys(SET_TYPE_LABELS) as SetType[]).map((t) => (
+                <button
+                  key={t}
+                  onClick={() => setET(t)}
+                  aria-pressed={eT === t}
+                  className={`flex-1 rounded-full border px-2 py-1.5 text-xs font-medium transition ${
+                    eT === t
+                      ? "border-accent bg-accent/10 text-accent"
+                      : "border-border bg-surface text-muted"
+                  }`}
+                >
+                  {SET_TYPE_LABELS[t]}
+                </button>
+              ))}
+            </div>
+            <div className="mt-4 flex gap-2">
+              <Button
+                variant="surface"
+                size="lg"
+                onClick={() => {
+                  onDeleteSet(editing.id);
+                  setEditing(null);
+                }}
+              >
+                <Trash2 size={16} aria-hidden="true" />
+                Delete
+              </Button>
+              <Button
+                variant="accent"
+                size="lg"
+                className="flex-1"
+                onClick={() => {
+                  onEditSet(editing.id, eW, eR, eT);
+                  setEditing(null);
+                }}
+              >
+                Save set
+              </Button>
+            </div>
+          </div>
+        )}
+      </Sheet>
     </div>
   );
 }
@@ -249,11 +327,13 @@ function SetRow({
   index,
   set,
   unit,
+  onEdit,
   onDelete,
 }: {
   index: number;
   set: SetLog;
   unit: Unit;
+  onEdit: () => void;
   onDelete: () => void;
 }) {
   const [tx, setTx] = useState(0);
@@ -261,11 +341,13 @@ function SetRow({
   const [dragging, setDragging] = useState(false);
   const startX = useRef(0);
   const base = useRef(0);
+  const moved = useRef(false); // distinguish a swipe from a tap
 
   const label = set.weight > 0 ? `${fmtWeight(set.weight, unit)} × ${set.reps}` : `BW × ${set.reps}`;
 
   const onDown = (e: React.PointerEvent) => {
     setDragging(true);
+    moved.current = false;
     startX.current = e.clientX;
     base.current = revealed ? -REVEAL : 0;
     (e.currentTarget as Element).setPointerCapture?.(e.pointerId);
@@ -273,6 +355,7 @@ function SetRow({
   const onMove = (e: React.PointerEvent) => {
     if (!dragging) return;
     const d = e.clientX - startX.current;
+    if (Math.abs(d) > 4) moved.current = true;
     setTx(Math.min(0, Math.max(base.current + d, -REVEAL)));
   };
   const onEnd = () => {
@@ -305,7 +388,10 @@ function SetRow({
           if (revealed) {
             setRevealed(false);
             setTx(0);
+            return;
           }
+          if (moved.current) return; // was a swipe, not a tap
+          onEdit();
         }}
         style={{
           transform: `translateX(${tx}px)`,

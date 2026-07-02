@@ -1,5 +1,30 @@
 # GymBud — Session Handoff
 
+## SESSION 2026-07-02 — real-usage bug batch (branch `fix/workout-ux-batch`, NOT committed)
+One-line state: 8 of 9 reported bugs fixed on branch `fix/workout-ux-batch`; `npm run lint` + `npm run build` clean, set-edit flow verified live on dev (:3002). Not committed, not pushed.
+
+What was done this session (from real phone-usage feedback):
+1. **Mid-session notes** — `StickyNote` button in the workout header opens a `NoteEditor` sheet; saves anytime via existing PATCH note (turns lime when a note exists). Finish-screen note still works. `workout-client.tsx`.
+2. **Weight field select-on-focus** — `stepper.tsx` input now `onFocus={e=>e.currentTarget.select()}` so you type e.g. 14 straight over 20 (steps are 2.5, couldn't land on 14 before).
+3+5. **Position + rest persist across leaving /workout** — root cause: `/workout` is NOT a bottom-nav tab, so navigating away unmounts `WorkoutClient` and wipes `current` (→ exercise 1) + rest timer. Now persisted in `sessionStorage` (`gymbud:pos:<id>`, `gymbud:rest:<id>`), seeded via `initialPos`/`initialRest` (peek cache) for in-app nav and restored in the `/api/sessions/active` `.then` for full reloads. Cleared on finish.
+4. **Edit a logged set** — tap any set row to open an editor (weight/reps/type or delete). New `PATCH /api/sets/[id]` → `store.updateSet` (+ `store.setOwner` helper). `SetRow` distinguishes tap vs swipe via a `moved` ref. `exercise-card.tsx`, `sets/[id]/route.ts`, `store.ts`.
+6. **Wall-clock timers** — `RestBar` rewritten to derive time-left from a target end timestamp (props `endsAt`, `total`), not a decrementing counter; `visibilitychange` snaps on return. `ElapsedTimer` also snaps on visibility. Fixes "timer frozen when phone locked". NOTE: `PhaseTimer` (warm-up/cool-down) still tick-based — intentionally left (off by default, cosmetic).
+7. **Set counter** — `exercise-card.tsx` counts working sets only (`type !== 'warmup'`), caps at target, shows "Extra set" past target. No more "5 of 4".
+9. **Fetch resilience** — `format.ts#api` retries GETs (3x, backoff) on network error / 5xx / 429; surfaces "Couldn't reach the server" instead of raw "Failed to fetch" (the "fail to load" banner).
+
+Gotcha hit this session: React 19 eslint (`react-hooks/purity`, `refs`, `set-state-in-effect`) rejects `Date.now()` in `useRef`/render, ref reads during render, and sync `setState` in an effect body. Fixes: cap is state (not ref) + `total` prop; `nowMs()` helper; restore logic moved out of a bare effect into useState initializers + the fetch `.then` callback.
+
+NEXT STEPS (numbered):
+1. Review on phone (`npm run dev`, Agentation dev-only), then commit the branch + merge (do NOT push straight to `main` — auto-deploys to Vercel).
+2. **#8 short / one-hour workout mode** — deferred; build WITH routines (touches `coach.ts#suggestWorkout` + `suggestion-card.tsx` + a duration picker).
+3. **Lock `APP_PASSCODE` on Vercel + rotate Turso/Gemini creds** — app is likely still OPEN to anyone with the URL (carried from prior handoff, still not done).
+4. **Routines/templates** (long-standing #1 backlog).
+5. **Feed AI Coach the user's real history/goal** — `api/coach/route.ts` currently sends only the raw question (context-blind).
+
+Files touched: `src/components/{workout-client,exercise-card,stepper}.tsx`, `src/lib/{store,format}.ts`, `src/app/api/sets/[id]/route.ts`.
+
+---
+
 ## SESSION 2026-06-18 — UX batch (9 changes, all built + runtime-checked on dev)
 One-line state: 9 requested changes done on local dev (`npm run dev`), compiled clean, NOT yet committed/pushed.
 
