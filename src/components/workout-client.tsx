@@ -701,6 +701,7 @@ export function WorkoutClient() {
               <ExerciseCard
                 se={se}
                 unit={unit}
+                goal={goal}
                 lastData={lastMap[se.exerciseId]}
                 targetSets={target}
                 commitRef={commitRef}

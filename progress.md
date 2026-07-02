@@ -1,5 +1,23 @@
 # GymBud — Session Handoff
 
+## SESSION 2026-07-02 (part 3) — prescription-first workout card (branch `fix/workout-ux-batch`)
+One-line state: reframed the app from "logs what you did" to "tells you what to do." New `Prescription` banner is the loud top of each exercise card. Lint + build clean; data flow verified live (:3002).
+
+Why: Auri doesn't care about the stored history. The app's reason to exist is removing decisions at the gym, not record-keeping. The coach logic already computed the target; it was just whispering.
+
+What was done:
+- `exercise-card.tsx`: new `Prescription` component replaces the quiet "last time + badge" row. Two states:
+  - **No history** (`lastData.last == null`, target action "start"): a "Test set" banner (FlaskConical) telling you to pick a weight for the goal's rep range and log it (calibration baseline).
+  - **Has history**: big lime suggested weight + "aim {low} to {high} reps" + `CoachBadge` (Add/Same/Drop weight) + "Last time: WxR" footnote. Dropped the coach `reason` string here (it's written "next session" tense, wrong for a do-it-now banner; badge + number say it).
+- `goal` now passed `WorkoutClient -> ExerciseCard` (needed for `REP_RANGE`).
+- Data flow relies on existing `/api/exercises/[id]/last` which runs `recommendNext(lastWorkingSets, [], goal, unit, lastDifficulty)` -> real increase/maintain/back_off + suggestedWeight.
+
+Verified live: first call -> last=null/action=start (Test set); after logging 60x12 (muscle_gain 8-12, top of range) -> last=60x12, action=increase, suggested=62.5. Stepper already prefills suggestedWeight so tapping "Next set" logs the prescribed load.
+
+Direction note (agreed with Auri): de-emphasise analytics/history UI (they don't care), keep the DB. The app should answer "what do I do right now" first. Routines are now SECONDARY to this.
+
+---
+
 ## SESSION 2026-07-02 (part 2) — short-workout mode + AI coach context (branch `fix/workout-ux-batch`)
 One-line state: two features added on the same branch; lint + build clean; coach route verified graceful (503 no-key / 422 bad input). Committed after the bug batch. Short-workout is client-only (fully testable); AI personalization needs `GEMINI_API_KEY` (on Vercel) for a live check.
 

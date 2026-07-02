@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, type MutableRefObject } from "react";
-import { ArrowLeftRight, Dices, PlayCircle, Trash2 } from "lucide-react";
+import { ArrowLeftRight, Dices, FlaskConical, PlayCircle, Trash2 } from "lucide-react";
 import { Stepper } from "./stepper";
 import { CoachBadge } from "./coach-badge";
 import { DemoSheet } from "./demo";
@@ -11,7 +11,9 @@ import { EXERCISES_BY_ID } from "@/lib/exercise-library";
 import {
   EQUIPMENT_LABELS,
   MUSCLE_LABELS,
+  REP_RANGE,
   SET_TYPE_LABELS,
+  type Goal,
   type Recommendation,
   type SessionExercise,
   type SetLog,
@@ -28,6 +30,7 @@ export interface LastData {
 export function ExerciseCard({
   se,
   unit,
+  goal,
   lastData,
   targetSets,
   commitRef,
@@ -40,6 +43,7 @@ export function ExerciseCard({
 }: {
   se: SessionExercise;
   unit: Unit;
+  goal: Goal;
   lastData?: LastData;
   /** how many working sets the plan calls for (drives the "Set N of M" label) */
   targetSets: number;
@@ -133,19 +137,9 @@ export function ExerciseCard({
         </div>
       </div>
 
-      {/* last time + coach target (only when there's real history to show) */}
-      {lastData?.last && (
-        <div className="mx-4 mb-3 flex items-center justify-between gap-2 rounded-[var(--radius-md)] bg-surface-2 px-3 py-2 text-sm">
-          <span className="text-muted">
-            Last time:{" "}
-            <span className="text-foreground">
-              {fmtWeight(topOf(lastData.last.sets).weight, unit)} ×{" "}
-              {topOf(lastData.last.sets).reps}
-            </span>
-          </span>
-          <CoachBadge action={lastData.target.action} />
-        </div>
-      )}
+      {/* The loud part: what to actually do on this exercise right now. */}
+      <Prescription lastData={lastData} unit={unit} goal={goal} isBW={isBW} />
+
 
       {/* composer FIRST so adding a set (which grows the list below) never
           shifts the controls you're actually using */}
@@ -319,6 +313,61 @@ function RegisterCommit({
 
 function topOf(sets: SetLog[]): SetLog {
   return [...sets].sort((a, b) => b.weight - a.weight || b.reps - a.reps)[0];
+}
+
+// The single most important thing on the card: what to do on this lift right now.
+// No history yet -> a calibration "test set". History -> the coach's prescription
+// (the weight to load + the rep target), with last time as a small footnote.
+function Prescription({
+  lastData,
+  unit,
+  goal,
+  isBW,
+}: {
+  lastData?: LastData;
+  unit: Unit;
+  goal: Goal;
+  isBW: boolean;
+}) {
+  if (!lastData) return null; // last-time data still loading
+  const range = REP_RANGE[goal];
+
+  // First time on this exercise: don't fake a number, calibrate.
+  if (!lastData.last) {
+    return (
+      <div className="mx-4 mb-3 rounded-[var(--radius-md)] border border-accent/30 bg-accent/5 px-3 py-3">
+        <div className="flex items-center gap-2">
+          <FlaskConical size={16} className="text-accent" aria-hidden="true" />
+          <span className="display font-semibold">Test set</span>
+        </div>
+        <p className="mt-1 text-sm text-muted">
+          First time on this one. Pick a weight you can do for {range.low} to {range.high} reps and
+          log it. Next session I&apos;ll tell you the weight.
+        </p>
+      </div>
+    );
+  }
+
+  const t = lastData.target;
+  const last = topOf(lastData.last.sets);
+  return (
+    <div className="mx-4 mb-3 rounded-[var(--radius-md)] border border-border bg-surface-2 px-3 py-3">
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex items-baseline gap-2">
+          <span className="stat-num text-2xl font-bold text-accent">
+            {isBW ? "Bodyweight" : t.suggestedWeight !== null ? fmtWeight(t.suggestedWeight, unit) : "—"}
+          </span>
+          <span className="text-sm text-muted">
+            aim {range.low} to {range.high} reps
+          </span>
+        </div>
+        <CoachBadge action={t.action} />
+      </div>
+      <p className="mt-1.5 text-xs text-muted">
+        Last time: {fmtWeight(last.weight, unit)} × {last.reps}
+      </p>
+    </div>
+  );
 }
 
 const REVEAL = 76; // px the row slides to expose the Delete button
