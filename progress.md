@@ -1,5 +1,14 @@
 # GymBud — Session Handoff
 
+## SESSION 2026-07-02 — SHIPPED to main (merge 852455c), auto-deploying on Vercel
+The whole 2026-07-02 branch (`fix/workout-ux-batch`, parts 1-4 below) was merged to `main` and pushed → Vercel prod deploy triggered. Verify after deploy:
+1. **APP_PASSCODE still NOT set on Vercel → app is OPEN to anyone with the URL** (holds personal data). Lock it: `vercel env add APP_PASSCODE production` + redeploy. STILL OUTSTANDING.
+2. **AI Coach needs `GEMINI_API_KEY` on Vercel** — else the Coach tab returns 503 (context feature can't run). Confirm it's set.
+3. Smoke-test on the live URL: first-time exercise shows Test set; a repeat shows the prescription (weight + reps + Add/Same/Drop); a workout from yesterday reads "Yesterday"; short-workout length selector trims the suggestion.
+Note: branch merge re-added `updateSet` + `PATCH /api/sets/[id]` that a prior `270e965` had removed (the set-edit flow is back, intentionally, powering tap-to-edit).
+
+---
+
 ## SESSION 2026-07-02 (part 4) — relative-date bug fix (branch `fix/workout-ux-batch`)
 One-line state: fixed "workout done yesterday shows as Today." Lint + build clean; logic proven with a node check.
 
