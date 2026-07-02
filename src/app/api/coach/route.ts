@@ -1,6 +1,72 @@
 import { coachSchema, fail, readBody } from "@/lib/api";
+import {
+  getProfile,
+  getSession,
+  latestBodyWeight,
+  listSessions,
+  workoutStats,
+} from "@/lib/store";
+import { EXERCISES_BY_ID } from "@/lib/exercise-library";
+import { EQUIPMENT_LABELS, GOAL_LABELS } from "@/lib/types";
+import { parseDbDate } from "@/lib/date";
 
 export const dynamic = "force-dynamic";
+
+function daysAgo(s: string): string {
+  const d = Math.floor((Date.now() - parseDbDate(s).getTime()) / 86_400_000);
+  if (d <= 0) return "today";
+  if (d === 1) return "yesterday";
+  return `${d} days ago`;
+}
+
+// A compact snapshot of the lifter's real training so the coach can answer from
+// their actual numbers, not generic advice. Best-effort: on any error the coach
+// still works, just without personal context.
+async function trainingContext(unitFallback = "kg"): Promise<string> {
+  try {
+    const [profile, sessions, bw, stats] = await Promise.all([
+      getProfile(),
+      listSessions(6),
+      latestBodyWeight(),
+      workoutStats(),
+    ]);
+    const u = profile.unit ?? unitFallback;
+    const lines: string[] = [];
+    const equip = profile.equipment.length
+      ? profile.equipment.map((e) => EQUIPMENT_LABELS[e]).join(", ")
+      : "all equipment";
+    lines.push(
+      `Goal: ${GOAL_LABELS[profile.goal]}. Trains ${profile.daysPerWeek} days/week. Units: ${u}. Equipment: ${equip}.`,
+    );
+    if (bw) lines.push(`Bodyweight: ${bw.weight}${u} (${daysAgo(bw.loggedAt)}).`);
+    lines.push(
+      `Streak: ${stats.streak} week(s). ${stats.thisWeekSets} sets in the last 7 days. ${stats.totalWorkouts} workouts all-time.`,
+    );
+
+    const finished = sessions.filter((s) => s.finishedAt).slice(0, 3);
+    if (finished.length) {
+      lines.push("Recent workouts (top working set per exercise):");
+      for (const s of finished) {
+        const full = await getSession(s.id);
+        if (!full) continue;
+        const parts: string[] = [];
+        for (const se of full.exercises) {
+          const working = se.sets.filter((x) => x.type !== "warmup");
+          if (!working.length) continue;
+          const top = working.reduce((a, b) =>
+            b.weight > a.weight || (b.weight === a.weight && b.reps > a.reps) ? b : a,
+          );
+          const name = EXERCISES_BY_ID[se.exerciseId]?.name ?? se.exerciseId;
+          parts.push(`${name} ${top.weight}${u}x${top.reps}`);
+        }
+        if (parts.length) lines.push(`- ${daysAgo(s.startedAt)}: ${parts.slice(0, 8).join(", ")}`);
+      }
+    }
+    return lines.join("\n");
+  } catch {
+    return "";
+  }
+}
 
 // Fallback chain: any one of these can be briefly UNAVAILABLE under load, so we
 // try them in order (and do a second pass) before giving up.
@@ -27,8 +93,13 @@ export async function POST(req: Request) {
     return fail(503, "ai_unconfigured", "AI coach isn't set up yet. Add GEMINI_API_KEY to enable it.");
   }
 
+  const ctx = await trainingContext();
+  const system = ctx
+    ? `${SYSTEM}\n\nBelow is this lifter's recent training data. Use it to personalise your answer: reference their actual lifts, goal, and equipment when relevant. Do not repeat it back verbatim; only cite what's useful.\n\n${ctx}`
+    : SYSTEM;
+
   const payload = JSON.stringify({
-    systemInstruction: { parts: [{ text: SYSTEM }] },
+    systemInstruction: { parts: [{ text: system }] },
     contents: [{ role: "user", parts: [{ text: body.data.question }] }],
     generationConfig: { temperature: 0.4, maxOutputTokens: 600 },
   });

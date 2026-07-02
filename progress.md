@@ -1,5 +1,20 @@
 # GymBud — Session Handoff
 
+## SESSION 2026-07-02 (part 2) — short-workout mode + AI coach context (branch `fix/workout-ux-batch`)
+One-line state: two features added on the same branch; lint + build clean; coach route verified graceful (503 no-key / 422 bad input). Committed after the bug batch. Short-workout is client-only (fully testable); AI personalization needs `GEMINI_API_KEY` (on Vercel) for a live check.
+
+What was done:
+1. **Short / time-boxed workouts (#8)** — `coach.ts`: new `WorkoutLength = short|medium|long` + `LENGTH_LABELS` (~30/45/60 min) + `LENGTH_COUNT {4,6,8}` (fat_loss +1). `suggestWorkout` takes `length` (default "medium" = old behavior, no regression); `selectExercises` now takes `maxCount`. `suggestion-card.tsx`: a Clock length selector row above the focus chips.
+2. **AI Coach sees your data** — `api/coach/route.ts`: new `trainingContext()` builds a compact snapshot (profile goal/days/units/equipment, latest bodyweight, streak + week sets, last 3 finished sessions with the top working set per exercise) and appends it to the system prompt. Best-effort (try/catch → "" so the coach still works if the DB read fails). Was previously context-blind.
+
+Gotchas:
+- Coach personalization only shows with `GEMINI_API_KEY` set (Vercel has it; local .env.local does not) — verify the personalized answers once deployed.
+- Privacy: the LLM (Google) now receives the user's own training data. Fine for a single-user personal app; add a short privacy note if this ever serves other people.
+
+Next steps: unchanged from below (routines is the big one; passcode lock is Auri's Vercel action — see commands in chat).
+
+---
+
 ## SESSION 2026-07-02 — real-usage bug batch (branch `fix/workout-ux-batch`, NOT committed)
 One-line state: 8 of 9 reported bugs fixed on branch `fix/workout-ux-batch`; `npm run lint` + `npm run build` clean, set-edit flow verified live on dev (:3002). Not committed, not pushed.
 

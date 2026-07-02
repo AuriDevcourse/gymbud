@@ -2,10 +2,16 @@
 
 import { useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { ChevronRight, Flame, Shuffle } from "lucide-react";
+import { ChevronRight, Clock, Flame, Shuffle } from "lucide-react";
 import { Button, Card, Chip, SectionTitle } from "./ui";
 import { StartSuggested } from "./start-suggested";
-import { suggestWorkout, FOCUS_LABELS, type WorkoutFocus } from "@/lib/coach";
+import {
+  suggestWorkout,
+  FOCUS_LABELS,
+  LENGTH_LABELS,
+  type WorkoutFocus,
+  type WorkoutLength,
+} from "@/lib/coach";
 import type { Equipment, MuscleGroup } from "@/lib/exercise-library";
 import { EQUIPMENT_LABELS, GOAL_LABELS, MUSCLE_LABELS, type Goal } from "@/lib/types";
 
@@ -25,13 +31,15 @@ export function SuggestionCard({
   // seed 0 = the canonical suggestion; shuffling rolls a fresh variation
   const [seed, setSeed] = useState(0);
   const [focus, setFocus] = useState<WorkoutFocus>("auto");
+  const [length, setLength] = useState<WorkoutLength>("medium");
 
   const suggestion = useMemo(
-    () => suggestWorkout({ goal, daysPerWeek, available, daysSince, seed, focus }),
-    [goal, daysPerWeek, available, daysSince, seed, focus],
+    () => suggestWorkout({ goal, daysPerWeek, available, daysSince, seed, focus, length }),
+    [goal, daysPerWeek, available, daysSince, seed, focus, length],
   );
 
   const FOCUSES = Object.keys(FOCUS_LABELS) as WorkoutFocus[];
+  const LENGTHS = Object.keys(LENGTH_LABELS) as WorkoutLength[];
   const focusRow = useRef<HTMLDivElement>(null);
 
   const shuffle = () => setSeed(Math.floor(Math.random() * 1_000_000) + 1);
@@ -55,6 +63,24 @@ export function SuggestionCard({
             <Shuffle size={14} aria-hidden="true" />
             Shuffle
           </button>
+        </div>
+        {/* how much time you have — trims the session to fit */}
+        <div className="mb-2 flex items-center gap-1.5">
+          <Clock size={15} className="shrink-0 text-muted" aria-hidden="true" />
+          {LENGTHS.map((l) => (
+            <button
+              key={l}
+              onClick={() => setLength(l)}
+              aria-pressed={length === l}
+              className={`flex-1 rounded-full border px-2 py-1.5 text-xs font-medium transition ${
+                length === l
+                  ? "border-accent bg-accent/10 text-accent"
+                  : "border-border bg-surface-2 text-muted"
+              }`}
+            >
+              {LENGTH_LABELS[l]}
+            </button>
+          ))}
         </div>
         {/* pick a focus, or leave on Auto. Scrollbar hidden; arrow pages right. */}
         <div className="relative mb-3">
