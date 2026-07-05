@@ -15,6 +15,8 @@
   --muted: #8a929d;
   --muted-strong: #aab2bd;
 
+  --silhouette: #20272f;      /* recovery-map body fill */
+
   --accent: #c8f135;          /* energetic lime */
   --accent-foreground: #0a0c0e;
   --push: #ff6a2b;            /* orange = push harder */

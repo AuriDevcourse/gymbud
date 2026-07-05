@@ -98,21 +98,25 @@ const MAP: Record<MuscleGroup, { view: View; marks: React.ReactNode }> = {
   },
 };
 
-// The stylised body outline, shared by both views.
+// An athletic V-taper silhouette, shared by both views. Smooth tapered limbs so
+// it reads as a body, not blocks. Coordinates kept ~compatible with the muscle
+// marks above.
 function Silhouette() {
   return (
-    <g fill="var(--surface-3, #333)">
-      <circle cx="60" cy="28" r="13" />
-      {/* torso: broad shoulders tapering to the waist */}
-      <path d="M38 46 q22 -8 44 0 l-6 52 q-16 6 -32 0 Z" />
-      {/* hips */}
-      <rect x="44" y="96" width="32" height="22" rx="9" />
-      {/* arms */}
-      <rect x="28" y="48" width="10" height="50" rx="5" />
-      <rect x="82" y="48" width="10" height="50" rx="5" />
-      {/* legs */}
-      <rect x="46" y="116" width="13" height="74" rx="6" />
-      <rect x="61" y="116" width="13" height="74" rx="6" />
+    <g fill="var(--silhouette, #232a33)">
+      {/* head + neck */}
+      <ellipse cx="60" cy="22" rx="10.5" ry="12.5" />
+      <path d="M55.5 33 h9 v7 h-9 z" />
+      {/* torso: wide delts tapering to the waist */}
+      <path d="M41 47 Q60 40 79 47 Q81 62 74 80 Q60 87 46 80 Q39 62 41 47 Z" />
+      {/* pelvis */}
+      <path d="M47 79 Q60 85 73 79 L70 100 Q60 105 50 100 Z" />
+      {/* arms — tapered, hanging slightly out */}
+      <path d="M42 48 Q33 51 31 63 Q30 81 33.5 97 Q37 100 40 97 Q42.5 79 45.5 61 Q46.5 51 42 48 Z" />
+      <path d="M78 48 Q87 51 89 63 Q90 81 86.5 97 Q83 100 80 97 Q77.5 79 74.5 61 Q73.5 51 78 48 Z" />
+      {/* legs — tapered thigh to calf */}
+      <path d="M49 100 Q55 104 59 100 L58 148 Q57.5 172 55.5 190 Q52 192 49 190 Q47.5 168 47.5 130 Z" />
+      <path d="M61 100 Q65 104 71 100 L72.5 130 Q72.5 168 71 190 Q68 192 64.5 190 Q62.5 172 62 148 Z" />
     </g>
   );
 }
@@ -197,10 +201,24 @@ function HeatFigure({
   daysSince: Partial<Record<MuscleGroup, number>>;
 }) {
   return (
-    <svg viewBox="0 0 120 200" className="h-48 w-auto" aria-hidden="true">
+    <svg viewBox="0 0 120 205" className="h-52 w-auto" aria-hidden="true">
+      <defs>
+        <filter id="heatGlow" x="-50%" y="-50%" width="200%" height="200%">
+          <feGaussianBlur stdDeviation="3.4" />
+        </filter>
+      </defs>
       <Silhouette />
+      {/* strong soft glow — the "heat" */}
+      <g filter="url(#heatGlow)" opacity="0.7">
+        {muscles.map((m) => (
+          <g key={m} fill={recoveryColor(daysSince[m])}>
+            {MAP[m].marks}
+          </g>
+        ))}
+      </g>
+      {/* faint crisp core so the shape stays legible */}
       {muscles.map((m) => (
-        <g key={m} fill={recoveryColor(daysSince[m])} opacity="0.82">
+        <g key={m} fill={recoveryColor(daysSince[m])} opacity="0.45">
           {MAP[m].marks}
         </g>
       ))}

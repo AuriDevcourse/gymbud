@@ -13,7 +13,7 @@ import {
   type WorkoutLength,
 } from "@/lib/coach";
 import type { Equipment, MuscleGroup } from "@/lib/exercise-library";
-import { EQUIPMENT_LABELS, GOAL_LABELS, MUSCLE_LABELS, type Goal } from "@/lib/types";
+import { EQUIPMENT_LABELS, MUSCLE_LABELS, type Goal } from "@/lib/types";
 
 export function SuggestionCard({
   goal,
@@ -108,14 +108,7 @@ export function SuggestionCard({
             <ChevronRight size={16} aria-hidden="true" />
           </button>
         </div>
-        <p className="mb-3 text-sm text-muted">
-          {focus === "auto"
-            ? `Picked for your ${GOAL_LABELS[goal].toLowerCase()} goal, ${daysPerWeek} ${
-                daysPerWeek === 1 ? "day" : "days"
-              } a week. Shuffle for a different mix.`
-            : "Shuffle for a different mix of exercises."}
-        </p>
-        <div className="mb-4 flex flex-wrap gap-1.5">
+        <div className="mb-4 mt-3 flex flex-wrap gap-1.5">
           {suggestion.focus.slice(0, 6).map((m) => (
             <Chip key={m} tone="muted">
               {MUSCLE_LABELS[m]}

@@ -42,12 +42,21 @@ export default async function Home() {
 
   return (
     <div className="flex flex-col gap-6 pb-4">
-      <header>
-        <p className="text-sm text-muted">{greeting()}</p>
-        <h1 className="display text-2xl font-bold">
-          {profile.name ? profile.name : "Ready to train"}
-        </h1>
-        <p className="mt-0.5 text-sm text-muted-strong">{motivation(stats, lastDone)}</p>
+      <header className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="text-sm text-muted">{greeting()}</p>
+          <h1 className="display text-3xl font-bold leading-tight">
+            {profile.name ? profile.name : "Ready to train"}
+          </h1>
+          <p className="mt-1 text-sm text-muted-strong">{motivation(stats, lastDone)}</p>
+        </div>
+        {stats.streak > 0 && (
+          <div className="flex shrink-0 flex-col items-center rounded-[var(--radius-md)] bg-accent/10 px-3 py-2 text-accent">
+            <Flame size={18} aria-hidden="true" />
+            <span className="stat-num text-xl font-bold leading-none">{stats.streak}</span>
+            <span className="text-[0.55rem] uppercase tracking-wider">wk streak</span>
+          </div>
+        )}
       </header>
 
       {active && (
@@ -64,28 +73,20 @@ export default async function Home() {
         </Link>
       )}
 
-      {/* Quick stats — icons only, tap for the full picture */}
-      <Link href="/progress" className="block">
-        <Card className="flex items-center justify-between px-3 py-3">
-          <Stat icon={<Flame size={18} aria-hidden="true" />} value={String(stats.streak)} accent />
-          <Divider />
-          <Stat
-            icon={<Dumbbell size={18} aria-hidden="true" />}
-            value={String(stats.thisWeekSets)}
-          />
-          <Divider />
-          <Stat
-            icon={<Scale size={18} aria-hidden="true" />}
-            value={
-              bwTrend.current ? `${fmtWeight(bwTrend.current.weight)}${profile.unit}` : "–"
-            }
-          />
-          <Divider />
-          <Stat
-            icon={<TrendingUp size={18} aria-hidden="true" />}
-            value={lastDone ? shortAgo(lastDone.startedAt) : "–"}
-          />
-        </Card>
+      {/* Quick stats — labelled tiles, tap for the full picture */}
+      <Link href="/progress" className="grid grid-cols-4 gap-2">
+        <Stat icon={<Flame size={17} aria-hidden="true" />} value={String(stats.streak)} label="streak" accent />
+        <Stat icon={<Dumbbell size={17} aria-hidden="true" />} value={String(stats.thisWeekSets)} label="sets wk" />
+        <Stat
+          icon={<Scale size={17} aria-hidden="true" />}
+          value={bwTrend.current ? `${fmtWeight(bwTrend.current.weight)}` : "–"}
+          label={bwTrend.current ? profile.unit : "weight"}
+        />
+        <Stat
+          icon={<TrendingUp size={17} aria-hidden="true" />}
+          value={lastDone ? shortAgo(lastDone.startedAt) : "–"}
+          label="last"
+        />
       </Link>
 
       {/* Your program — the structured "what do I do next" answer */}
@@ -153,20 +154,19 @@ function shortAgo(s: string): string {
 function Stat({
   icon,
   value,
+  label,
   accent,
 }: {
   icon: React.ReactNode;
   value: string;
+  label: string;
   accent?: boolean;
 }) {
   return (
-    <div className="flex flex-1 flex-col items-center gap-1">
+    <div className="flex flex-col items-center gap-1 rounded-[var(--radius-md)] border border-border bg-surface py-2.5 shadow-[var(--shadow-card)]">
       <span className={accent ? "text-accent" : "text-muted"}>{icon}</span>
-      <span className="stat-num text-2xl font-bold leading-none">{value}</span>
+      <span className="stat-num text-xl font-bold leading-none">{value}</span>
+      <span className="text-[0.58rem] uppercase tracking-wider text-muted">{label}</span>
     </div>
   );
-}
-
-function Divider() {
-  return <span className="h-8 w-px shrink-0 bg-border" aria-hidden="true" />;
 }

@@ -39,7 +39,7 @@ export function Stepper({
           type="button"
           aria-label={`Decrease ${label}`}
           onClick={() => set(value - step)}
-          className="flex h-12 w-12 shrink-0 items-center justify-center rounded-[var(--radius-md)] border border-border bg-surface-2 text-foreground active:bg-surface-3"
+          className="flex h-12 w-12 shrink-0 items-center justify-center rounded-[var(--radius-md)] border border-border bg-surface-2 text-muted-strong active:bg-surface-3"
         >
           <Minus size={20} aria-hidden="true" />
         </button>
@@ -73,7 +73,7 @@ export function Stepper({
           type="button"
           aria-label={`Increase ${label}`}
           onClick={() => set(value + step)}
-          className="flex h-12 w-12 shrink-0 items-center justify-center rounded-[var(--radius-md)] border border-border bg-accent text-accent-foreground active:brightness-95"
+          className="flex h-12 w-12 shrink-0 items-center justify-center rounded-[var(--radius-md)] border border-border bg-surface-2 text-accent active:bg-surface-3"
         >
           <Plus size={20} aria-hidden="true" />
         </button>
