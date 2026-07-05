@@ -49,11 +49,13 @@ export function SuggestionCard({
       <SectionTitle right={<Chip tone="muted">{suggestion.exercises.length} moves</Chip>}>
         Today&apos;s suggestion
       </SectionTitle>
-      <Card>
+      <Card className="hero-accent border-accent/25">
         <div className="mb-3 flex items-center justify-between gap-2">
           <div className="flex items-center gap-2">
-            <Flame size={20} className="text-accent" aria-hidden="true" />
-            <h3 className="display text-xl font-bold">{suggestion.title}</h3>
+            <span className="grid h-8 w-8 place-items-center rounded-full bg-accent/15 text-accent">
+              <Flame size={17} aria-hidden="true" />
+            </span>
+            <h3 className="display text-2xl font-bold">{suggestion.title}</h3>
           </div>
           <button
             onClick={shuffle}

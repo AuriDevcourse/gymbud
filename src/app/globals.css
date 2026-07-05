@@ -119,6 +119,23 @@ label {
   outline: none;
 }
 
+/* ── Material surfaces — depth that reads as "expensive" ─────────────────── */
+/* Top-lit card: subtle vertical gradient (lighter at the top, as if lit from
+   above) + hairline top highlight. Applied to elevated cards. */
+.surface-grad {
+  background-image: linear-gradient(180deg, rgba(255, 255, 255, 0.035), rgba(255, 255, 255, 0) 40%);
+}
+/* The signature hero: a lime-tinted glass panel for the one primary action. */
+.hero-accent {
+  background-image:
+    radial-gradient(120% 120% at 15% -10%, rgba(200, 241, 53, 0.16), transparent 55%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.04), rgba(255, 255, 255, 0) 45%);
+}
+/* Lime gradient fill for the primary button — richer than a flat swatch. */
+.btn-accent {
+  background-image: linear-gradient(160deg, #d8fb52, #b6e026 90%);
+}
+
 /* tabular numbers everywhere stats appear, so digits don't jump */
 .stat-num {
   font-family: var(--font-display), var(--font-sans), sans-serif;

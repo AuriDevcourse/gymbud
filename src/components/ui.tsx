@@ -9,7 +9,7 @@ export function Card({
 }) {
   return (
     <div
-      className={`rounded-[var(--radius-lg)] border border-border bg-surface p-4 shadow-[var(--shadow-card)] ${className}`}
+      className={`surface-grad rounded-[var(--radius-lg)] border border-border bg-surface p-4 shadow-[var(--shadow-card)] ${className}`}
     >
       {children}
     </div>
@@ -67,8 +67,8 @@ export function Button({
   ...rest
 }: ButtonProps) {
   const variants = {
-    accent: "bg-accent text-accent-foreground hover:brightness-95 font-semibold shadow-[var(--shadow-accent)]",
-    surface: "bg-surface-2 text-foreground hover:bg-surface-3 border border-border",
+    accent: "btn-accent text-accent-foreground hover:brightness-105 font-semibold shadow-[var(--shadow-accent)]",
+    surface: "surface-grad bg-surface-2 text-foreground hover:bg-surface-3 border border-border",
     outline: "bg-transparent text-foreground border border-border hover:bg-surface-2",
     ghost: "bg-transparent text-muted hover:text-foreground",
     danger: "bg-transparent text-danger border border-danger/30 hover:bg-danger/10",
