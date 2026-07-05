@@ -11,26 +11,36 @@ type View = "front" | "back";
 
 // Per muscle: which side of the body to show, and the highlight shapes drawn on
 // top of the silhouette (mirrored left/right where the muscle is paired).
+// Muscle bellies drawn as smooth, roughly anatomical shapes (not blocks), so
+// under the glow they read as a real heat-map. Coords on a 120x205 viewBox that
+// matches the silhouette below.
 const MAP: Record<MuscleGroup, { view: View; marks: React.ReactNode }> = {
   chest: {
     view: "front",
+    // two pec shields angled toward the sternum
     marks: (
       <>
-        <ellipse cx="52" cy="60" rx="10" ry="8" />
-        <ellipse cx="68" cy="60" rx="10" ry="8" />
+        <path d="M59 54 Q49 52 45 58 Q44 64 50 66 Q57 66 59 60 Z" />
+        <path d="M61 54 Q71 52 75 58 Q76 64 70 66 Q63 66 61 60 Z" />
       </>
     ),
   },
   back: {
     view: "back",
-    marks: <path d="M42 50 h36 v34 l-18 8 -18 -8 Z" />,
+    // two lat wings sweeping from the armpits to the waist
+    marks: (
+      <>
+        <path d="M58 50 Q46 51 44 60 Q44 74 52 82 L58 78 Z" />
+        <path d="M62 50 Q74 51 76 60 Q76 74 68 82 L62 78 Z" />
+      </>
+    ),
   },
   shoulders: {
     view: "front",
     marks: (
       <>
-        <circle cx="40" cy="50" r="8" />
-        <circle cx="80" cy="50" r="8" />
+        <ellipse cx="41" cy="50" rx="8" ry="7" />
+        <ellipse cx="79" cy="50" rx="8" ry="7" />
       </>
     ),
   },
@@ -38,8 +48,8 @@ const MAP: Record<MuscleGroup, { view: View; marks: React.ReactNode }> = {
     view: "front",
     marks: (
       <>
-        <rect x="30" y="58" width="9" height="18" rx="4.5" />
-        <rect x="81" y="58" width="9" height="18" rx="4.5" />
+        <ellipse cx="35" cy="66" rx="4.5" ry="9" />
+        <ellipse cx="85" cy="66" rx="4.5" ry="9" />
       </>
     ),
   },
@@ -47,8 +57,8 @@ const MAP: Record<MuscleGroup, { view: View; marks: React.ReactNode }> = {
     view: "back",
     marks: (
       <>
-        <rect x="29" y="58" width="9" height="20" rx="4.5" />
-        <rect x="82" y="58" width="9" height="20" rx="4.5" />
+        <ellipse cx="34" cy="66" rx="4.5" ry="10" />
+        <ellipse cx="86" cy="66" rx="4.5" ry="10" />
       </>
     ),
   },
@@ -56,21 +66,23 @@ const MAP: Record<MuscleGroup, { view: View; marks: React.ReactNode }> = {
     view: "front",
     marks: (
       <>
-        <rect x="27" y="78" width="8" height="18" rx="4" />
-        <rect x="85" y="78" width="8" height="18" rx="4" />
+        <ellipse cx="32" cy="86" rx="4" ry="9" />
+        <ellipse cx="88" cy="86" rx="4" ry="9" />
       </>
     ),
   },
   core: {
     view: "front",
-    marks: <rect x="50" y="70" width="20" height="26" rx="5" />,
+    // abdominal column, tapering to the navel
+    marks: <path d="M54 68 Q60 66 66 68 L64 92 Q60 96 56 92 Z" />,
   },
   quads: {
     view: "front",
+    // teardrop thigh sweeps
     marks: (
       <>
-        <rect x="47" y="120" width="12" height="34" rx="6" />
-        <rect x="61" y="120" width="12" height="34" rx="6" />
+        <path d="M53 105 Q49 120 52 140 Q54 146 57 140 Q58 120 57 106 Z" />
+        <path d="M67 105 Q71 120 68 140 Q66 146 63 140 Q62 120 63 106 Z" />
       </>
     ),
   },
@@ -78,21 +90,26 @@ const MAP: Record<MuscleGroup, { view: View; marks: React.ReactNode }> = {
     view: "back",
     marks: (
       <>
-        <rect x="47" y="122" width="12" height="32" rx="6" />
-        <rect x="61" y="122" width="12" height="32" rx="6" />
+        <ellipse cx="54" cy="124" rx="5.5" ry="16" />
+        <ellipse cx="66" cy="124" rx="5.5" ry="16" />
       </>
     ),
   },
   glutes: {
     view: "back",
-    marks: <rect x="46" y="100" width="28" height="20" rx="8" />,
+    marks: (
+      <>
+        <ellipse cx="54" cy="102" rx="7.5" ry="8" />
+        <ellipse cx="66" cy="102" rx="7.5" ry="8" />
+      </>
+    ),
   },
   calves: {
     view: "back",
     marks: (
       <>
-        <rect x="48" y="162" width="10" height="26" rx="5" />
-        <rect x="62" y="162" width="10" height="26" rx="5" />
+        <ellipse cx="53" cy="166" rx="4.5" ry="12" />
+        <ellipse cx="67" cy="166" rx="4.5" ry="12" />
       </>
     ),
   },
