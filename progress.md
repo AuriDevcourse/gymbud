@@ -1,5 +1,33 @@
 # GymBud — Session Handoff
 
+## SESSION 2026-07-05 (part 3) — UI overhaul + coach removal + feel/animations (SHIPPED to main / prod)
+All work below is COMMITTED + PUSHED to `main` (auto-deploys to Vercel prod). Latest commit `eeb1334`. Working tree clean. Verified in-browser via the Chrome extension (dev on :3011, phone-width viewport). Full competitive teardown + scorecard in `COMPETITIVE-ANALYSIS.md`.
+
+**Per Auri's directives this session:**
+1. **AI Coach removed** — deleted `app/coach/`, `app/api/coach/`, `components/coach-client.tsx`, and the Coach nav tab (nav back to 5: Today/Programs/Exercises/Progress/Profile). `lib/coach.ts` progression logic STAYS (powers prescriptions + auto-progression). `coachSchema` in `lib/api.ts` is now an unused export (harmless).
+2. **APP_PASSCODE** — deliberately NOT set (Auri: single-user, fine open for now). Deferred to the very end. App is currently OPEN on prod.
+3. **Rate-limit / privacy / terms / accessibility** — skipped by request (single-user).
+4. **Chrome extension** — now connected; used it to screenshot + iterate every change live.
+
+**UI overhaul (keep lime green #c8f135; fewer words; more icons):**
+- Design tokens: elevation shadows (`--shadow-card/raised/accent`), `--silhouette`, material utilities in globals.css: `.surface-grad` (top-lit cards), `.hero-accent` (lime-glass hero), `.btn-accent` (gradient primary).
+- Home: bold hero + `animate-pop` streak badge; cramped icon row → 4 labelled stat tiles (streak/sets wk/kg/last); hero-accent treatment on the "today's suggestion" card so it's the clear focal point; trimmed wordy copy.
+- Recovery figure REDRAWN — muscles are now smooth anatomical bellies (pecs/lats/delts/abs/quads/hams/glutes/calves) with a `feGaussianBlur` heat-glow on a V-taper silhouette. Was the amateur eyesore; now a highlight. `body-map.tsx`.
+- Steppers: symmetric neutral −/+ (was lime +, dark −) so lime = the real action only.
+- Cards/buttons/nav/empty-states share one material system.
+
+**Feel — responsiveness + rewarding animations (research-backed, library-free):**
+- `app/**/loading.tsx` skeletons per route → tab tap paints instantly instead of freezing (biggest perceived-perf win). Reuses `PageSkeleton`.
+- `lib/haptics.ts` — `tapHaptic()` (set logged, start) + `successHaptic()` (PR, finish). navigator.vibrate: works Android, NO-OP on iOS Safari (Apple limitation — visual polish still applies). Respects reduced-motion.
+- `components/count-up.tsx` — rAF ease-out CountUp (DOM-write, no re-render, animates once). Wired into the finish-summary hero totals (kg moved / sets / min).
+- Optimistic set logging + confetti + wall-clock rest timer already existed.
+
+**Rating trajectory this session:** ~66 → ~86 on features/emotion, then the UI/feel overhaul on top. Honest caveat recorded: "wow/amazing" is Auri's call (he's the arbiter), and a true 90 still wants a Strong-style tap-to-confirm set-row table + Auri's own eyes.
+
+**TO CHECK LATER (Auri):** smoke-test prod on phone — heatmap, hero card, gradient buttons, tab-nav skeletons, log-a-set haptic+response, finish count-up. Weakest-spot feedback wanted. Outstanding (end): APP_PASSCODE on Vercel.
+
+---
+
 ## SESSION 2026-07-05 (part 2) — competitive overhaul toward 90/100 (UNCOMMITTED, on `main`)
 Goal from Auri: research the loved apps, rate them + us, then drastically improve feel/look/features toward 90/100, emotion-first, without deleting past workouts. Full analysis in `COMPETITIVE-ANALYSIS.md`.
 
