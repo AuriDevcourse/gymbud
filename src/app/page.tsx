@@ -51,7 +51,7 @@ export default async function Home() {
           <p className="mt-1 text-sm text-muted-strong">{motivation(stats, lastDone)}</p>
         </div>
         {stats.streak > 0 && (
-          <div className="flex shrink-0 flex-col items-center rounded-[var(--radius-md)] bg-accent/10 px-3 py-2 text-accent">
+          <div className="animate-pop flex shrink-0 flex-col items-center rounded-[var(--radius-md)] bg-accent/10 px-3 py-2 text-accent">
             <Flame size={18} aria-hidden="true" />
             <span className="stat-num text-xl font-bold leading-none">{stats.streak}</span>
             <span className="text-[0.55rem] uppercase tracking-wider">wk streak</span>

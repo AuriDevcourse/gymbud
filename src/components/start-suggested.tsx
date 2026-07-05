@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { Play } from "lucide-react";
 import { Button } from "./ui";
+import { tapHaptic } from "@/lib/haptics";
 
 // Shared hand-off key: StartSuggested writes the intent, WorkoutClient fulfills it.
 export const PENDING_WORKOUT_KEY = "gymbud:pending-workout";
@@ -18,6 +19,7 @@ export function StartSuggested({
 
   // Optimistic: navigate instantly, create the session on the workout page.
   const start = () => {
+    tapHaptic();
     try {
       sessionStorage.setItem(PENDING_WORKOUT_KEY, JSON.stringify({ exerciseIds }));
     } catch {

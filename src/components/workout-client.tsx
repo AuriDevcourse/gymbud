@@ -29,6 +29,8 @@ import { CoachBadge } from "./coach-badge";
 import { ExerciseCard, type LastData } from "./exercise-card";
 import { WorkoutSkeleton } from "./skeleton";
 import { api, fmtWeight } from "@/lib/format";
+import { tapHaptic, successHaptic } from "@/lib/haptics";
+import { CountUp } from "./count-up";
 import { peek, poke, useApi } from "@/lib/swr";
 import { parseDbDate } from "@/lib/date";
 import { getAlternatives } from "@/lib/coach";
@@ -410,6 +412,7 @@ export function WorkoutClient() {
       ),
     }));
     celebrate(false);
+    tapHaptic(); // physical tick the instant a set is logged
     const ends = Date.now() + restSeconds(goal) * 1000;
     setRestEndsAt(ends);
     if (session) store.set(restKeyFor(session.id), String(ends));
@@ -431,6 +434,7 @@ export function WorkoutClient() {
       }));
       if (real.pr) {
         celebrate(true);
+        successHaptic(); // strong double-pulse for a PR
         const nm = EXERCISES_BY_ID[se.exerciseId]?.name ?? "lift";
         setToast({ msg: `New PR · ${nm}` });
         setPrNames((p) => (p.includes(nm) ? p : [...p, nm]));
@@ -536,6 +540,7 @@ export function WorkoutClient() {
       setSummary(res.recommendations);
       setFinishOpen(true);
       celebrate(true);
+      successHaptic();
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -929,9 +934,21 @@ function FinishSummary({
               {logged.length} {logged.length === 1 ? "exercise" : "exercises"} · nice work.
             </p>
             <div className="mt-3 grid grid-cols-3 gap-2">
-              <HeroStat icon={<Dumbbell size={16} aria-hidden="true" />} value={fmtWeight(Math.round(volume), unit)} label={`${unit} moved`} />
-              <HeroStat icon={<Layers size={16} aria-hidden="true" />} value={String(totalSets)} label="sets" />
-              <HeroStat icon={<Timer size={16} aria-hidden="true" />} value={`${durMin}`} label="min" />
+              <HeroStat
+                icon={<Dumbbell size={16} aria-hidden="true" />}
+                value={<CountUp value={Math.round(volume)} format={(n) => fmtWeight(Math.round(n), unit)} />}
+                label={`${unit} moved`}
+              />
+              <HeroStat
+                icon={<Layers size={16} aria-hidden="true" />}
+                value={<CountUp value={totalSets} />}
+                label="sets"
+              />
+              <HeroStat
+                icon={<Timer size={16} aria-hidden="true" />}
+                value={<CountUp value={durMin} />}
+                label="min"
+              />
             </div>
             {prNames.length > 0 && (
               <div className="mt-3 flex items-center justify-center gap-1.5 rounded-full bg-accent/15 px-3 py-1.5 text-sm font-semibold text-accent">
@@ -1052,7 +1069,7 @@ function ShareResult({
 }
 
 // One tile in the finish-screen hero row.
-function HeroStat({ icon, value, label }: { icon: React.ReactNode; value: string; label: string }) {
+function HeroStat({ icon, value, label }: { icon: React.ReactNode; value: React.ReactNode; label: string }) {
   return (
     <div className="rounded-[var(--radius-md)] bg-surface-2/60 py-2">
       <span className="mx-auto mb-1 flex justify-center text-accent">{icon}</span>
