@@ -1,18 +1,23 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   CheckCircle2,
   ChevronLeft,
   ChevronRight,
+  Dumbbell,
   Flag,
   Flame,
+  Layers,
   Loader2,
+  Check,
   Plus,
+  Share2,
   Snowflake,
   StickyNote,
   Timer,
+  Trophy,
   Undo2,
   X,
 } from "lucide-react";
@@ -23,10 +28,11 @@ import { PENDING_WORKOUT_KEY } from "./start-suggested";
 import { CoachBadge } from "./coach-badge";
 import { ExerciseCard, type LastData } from "./exercise-card";
 import { WorkoutSkeleton } from "./skeleton";
-import { api } from "@/lib/format";
+import { api, fmtWeight } from "@/lib/format";
 import { peek, poke, useApi } from "@/lib/swr";
 import { parseDbDate } from "@/lib/date";
 import { getAlternatives } from "@/lib/coach";
+import { targetSetsFor } from "@/lib/loading";
 import {
   EXERCISES_BY_ID,
   type Equipment,
@@ -55,13 +61,6 @@ function restSeconds(goal: Goal): number {
   if (goal === "muscle_gain") return 90;
   if (goal === "fat_loss") return 45;
   return 75;
-}
-
-// how many working sets the plan calls for, by goal
-function targetSetsFor(goal: Goal): number {
-  if (goal === "strength") return 5;
-  if (goal === "muscle_gain") return 4;
-  return 3; // fat_loss, general
 }
 
 // A short label for what this session is, from the muscles it trains.
@@ -180,9 +179,19 @@ export function WorkoutClient() {
   const [finishOpen, setFinishOpen] = useState(false);
   const [summary, setSummary] = useState<RecRow[] | null>(null);
   const [busy, setBusy] = useState(false);
+  // PRs the lifter set this session — powers the finish-screen celebration.
+  const [prNames, setPrNames] = useState<string[]>([]);
 
   // bottom-bar "Next set" fires the current exercise card's add-set commit
   const commitRef = useRef<(() => void) | null>(null);
+  // live composer values, so the primary button reads "Log 62.5 × 10". Guarded
+  // so a no-op update can't loop; onValues is stable (empty deps).
+  const [composer, setComposer] = useState<{ w: number; r: number; show: boolean } | null>(null);
+  const onValues = useCallback((w: number, r: number, show: boolean) => {
+    setComposer((prev) =>
+      prev && prev.w === w && prev.r === r && prev.show === show ? prev : { w, r, show },
+    );
+  }, []);
   const [swapOpen, setSwapOpen] = useState(false);
 
   // workout phases: warm up → working sets → cool down
@@ -422,7 +431,9 @@ export function WorkoutClient() {
       }));
       if (real.pr) {
         celebrate(true);
-        setToast({ msg: `New PR · ${EXERCISES_BY_ID[se.exerciseId]?.name ?? "lift"}` });
+        const nm = EXERCISES_BY_ID[se.exerciseId]?.name ?? "lift";
+        setToast({ msg: `New PR · ${nm}` });
+        setPrNames((p) => (p.includes(nm) ? p : [...p, nm]));
       }
     } catch (e) {
       patch((s) => ({
@@ -611,6 +622,9 @@ export function WorkoutClient() {
           <FinishSummary
           exercises={session.exercises}
           summary={summary}
+          startedAt={session.startedAt}
+          prNames={prNames}
+          unit={unit}
           onNote={saveNote}
           onRate={rateDifficulty}
         />
@@ -627,7 +641,9 @@ export function WorkoutClient() {
   const idx = Math.min(current, Math.max(0, exercises.length - 1));
   const se = exercises[idx];
   const onLast = idx >= exercises.length - 1;
-  const target = targetSetsFor(goal);
+  const target = se
+    ? targetSetsFor(goal, EXERCISES_BY_ID[se.exerciseId]?.type ?? "compound")
+    : 0;
   // warm-up sets don't count toward the working-set target
   const setsDone = se ? se.sets.filter((s) => s.type !== "warmup").length : 0;
   const setsComplete = setsDone >= target;
@@ -705,6 +721,7 @@ export function WorkoutClient() {
                 lastData={lastMap[se.exerciseId]}
                 targetSets={target}
                 commitRef={commitRef}
+                onValues={onValues}
                 onAddSet={(w, r, t) => addSet(se, w, r, t)}
                 onDeleteSet={(id) => deleteSet(se, id)}
                 onEditSet={(id, w, r, t) => editSet(se, id, w, r, t)}
@@ -733,7 +750,12 @@ export function WorkoutClient() {
                   className="flex-1"
                   onClick={() => commitRef.current?.()}
                 >
-                  Next set
+                  <CheckCircle2 size={18} aria-hidden="true" />
+                  {composer
+                    ? composer.show
+                      ? `Log ${fmtWeight(composer.w, unit)} × ${composer.r}`
+                      : `Log ${composer.r} reps`
+                    : "Log set"}
                 </Button>
               ) : onLast ? (
                 <Button
@@ -821,6 +843,9 @@ export function WorkoutClient() {
         <FinishSummary
           exercises={session.exercises}
           summary={summary}
+          startedAt={session.startedAt}
+          prNames={prNames}
+          unit={unit}
           onNote={saveNote}
           onRate={rateDifficulty}
         />
@@ -858,11 +883,17 @@ function NoteEditor({ initial, onSave }: { initial: string; onSave: (n: string) 
 function FinishSummary({
   exercises,
   summary,
+  startedAt,
+  prNames,
+  unit,
   onNote,
   onRate,
 }: {
   exercises: SessionExercise[];
   summary: RecRow[] | null;
+  startedAt: string;
+  prNames: string[];
+  unit: Unit;
   onNote: (n: string) => void;
   onRate: (seId: number, d: Difficulty) => void;
 }) {
@@ -879,10 +910,44 @@ function FinishSummary({
     onRate(seId, d);
   };
 
+  // Celebration numbers: total load moved, working sets, and how long it took.
+  // Snap "finished at" once (React 19 purity forbids Date.now() in render).
+  const [finishedMs] = useState(nowMs);
+  const working = logged.flatMap((e) => e.sets.filter((s) => s.type !== "warmup"));
+  const volume = working.reduce((n, s) => n + s.weight * s.reps, 0);
+  const totalSets = working.length;
+  const durMin = Math.max(1, Math.round((finishedMs - parseDbDate(startedAt).getTime()) / 60000));
+
   return (
     <div>
       {logged.length > 0 ? (
         <>
+          {/* The reward: what you just did, loud, before any admin. */}
+          <div className="mb-4 overflow-hidden rounded-[var(--radius-lg)] border border-accent/30 bg-gradient-to-b from-accent/12 to-transparent px-4 py-4 text-center">
+            <p className="display text-lg font-bold text-accent">Session done</p>
+            <p className="mt-0.5 text-sm text-muted">
+              {logged.length} {logged.length === 1 ? "exercise" : "exercises"} · nice work.
+            </p>
+            <div className="mt-3 grid grid-cols-3 gap-2">
+              <HeroStat icon={<Dumbbell size={16} aria-hidden="true" />} value={fmtWeight(Math.round(volume), unit)} label={`${unit} moved`} />
+              <HeroStat icon={<Layers size={16} aria-hidden="true" />} value={String(totalSets)} label="sets" />
+              <HeroStat icon={<Timer size={16} aria-hidden="true" />} value={`${durMin}`} label="min" />
+            </div>
+            {prNames.length > 0 && (
+              <div className="mt-3 flex items-center justify-center gap-1.5 rounded-full bg-accent/15 px-3 py-1.5 text-sm font-semibold text-accent">
+                <Trophy size={15} aria-hidden="true" />
+                {prNames.length} new {prNames.length === 1 ? "PR" : "PRs"}
+                <span className="font-normal text-muted-strong">· {prNames.join(", ")}</span>
+              </div>
+            )}
+            <ShareResult
+              volume={Math.round(volume)}
+              sets={totalSets}
+              min={durMin}
+              prCount={prNames.length}
+              unit={unit}
+            />
+          </div>
           <p className="mb-3 text-sm text-muted">
             How hard was each one? It tunes next session&apos;s weights.
           </p>
@@ -940,6 +1005,63 @@ function FinishSummary({
   );
 }
 
+// Share the session — the "look what I did" moment top apps use to make finishing
+// feel worth showing off. Web Share where available (native sheet), clipboard
+// fallback otherwise. Text-only, so nothing to render blind or get wrong.
+function ShareResult({
+  volume,
+  sets,
+  min,
+  prCount,
+  unit,
+}: {
+  volume: number;
+  sets: number;
+  min: number;
+  prCount: number;
+  unit: string;
+}) {
+  const [done, setDone] = useState<null | "shared" | "copied">(null);
+  const text =
+    `Workout done on GymBud: ${fmtWeight(volume, unit as Unit)}${unit} moved · ${sets} sets · ${min} min` +
+    (prCount > 0 ? ` · ${prCount} new PR${prCount === 1 ? "" : "s"}` : "");
+
+  const share = async () => {
+    try {
+      if (typeof navigator !== "undefined" && navigator.share) {
+        await navigator.share({ title: "GymBud", text });
+        setDone("shared");
+      } else if (typeof navigator !== "undefined" && navigator.clipboard) {
+        await navigator.clipboard.writeText(text);
+        setDone("copied");
+      }
+    } catch {
+      /* user dismissed the share sheet — no-op */
+    }
+  };
+
+  return (
+    <button
+      onClick={share}
+      className="mx-auto mt-3 flex items-center gap-1.5 rounded-full border border-border bg-surface-2 px-4 py-1.5 text-sm font-medium text-foreground"
+    >
+      {done ? <Check size={15} aria-hidden="true" /> : <Share2 size={15} aria-hidden="true" />}
+      {done === "copied" ? "Copied" : done === "shared" ? "Shared" : "Share result"}
+    </button>
+  );
+}
+
+// One tile in the finish-screen hero row.
+function HeroStat({ icon, value, label }: { icon: React.ReactNode; value: string; label: string }) {
+  return (
+    <div className="rounded-[var(--radius-md)] bg-surface-2/60 py-2">
+      <span className="mx-auto mb-1 flex justify-center text-accent">{icon}</span>
+      <p className="stat-num text-xl font-bold leading-none">{value}</p>
+      <p className="mt-1 text-[0.65rem] uppercase tracking-wider text-muted">{label}</p>
+    </div>
+  );
+}
+
 function ElapsedTimer({ startedAt }: { startedAt: string }) {
   const [start] = useState(() => parseDbDate(startedAt).getTime());
   const [now, setNow] = useState(start);
@@ -979,9 +1101,11 @@ function RestBar({
   onChange: (end: number) => void;
   onClose: () => void;
 }) {
-  const [end, setEnd] = useState(endsAt);
+  // `endsAt` is the single source of truth (owned by the parent): logging the
+  // next set pushes a fresh end-time down, and +/-15 flow back up via onChange.
+  // Deriving from the prop — instead of a useState(endsAt) seeded once at mount —
+  // is what makes the bar actually RESET when you start your next set.
   const [now, setNow] = useState(nowMs);
-  const [cap, setCap] = useState(Math.max(1, total));
   const vibratedRef = useRef(false);
 
   useEffect(() => {
@@ -999,8 +1123,11 @@ function RestBar({
     };
   }, []);
 
-  const left = Math.max(0, Math.round((end - now) / 1000));
+  const left = Math.max(0, Math.round((endsAt - now) / 1000));
   const done = left <= 0;
+  // Bar's full mark: the goal's rest length, or the remaining time if you've
+  // pushed it past that with +15. Derived, so a new set snaps it back to full.
+  const cap = Math.max(1, total, left);
 
   useEffect(() => {
     if (done && !vibratedRef.current) {
@@ -1011,10 +1138,8 @@ function RestBar({
   }, [done]);
 
   const adjust = (delta: number) => {
-    const ne = end + delta * 1000;
-    setEnd(ne);
-    if (delta > 0) setCap((c) => c + delta); // grow the bar's full mark
-    onChange(ne);
+    // push the new end-time up to the parent; it flows back as `endsAt`
+    onChange(endsAt + delta * 1000);
   };
 
   const pct = Math.max(0, Math.min(1, left / cap));

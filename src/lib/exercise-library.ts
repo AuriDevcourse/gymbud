@@ -23,6 +23,15 @@ export type Equipment =
 
 export type ExerciseType = "compound" | "isolation";
 
+// How weight is entered for this lift. Usually derived from `equipment`
+// (see src/lib/loading.ts), but set explicitly when the default is wrong:
+//  - "total"  the number you enter is the whole load (barbell, machine, cable)
+//  - "each"   one dumbbell/kettlebell, held in each hand (default for those)
+//  - "added"  bodyweight lift you can hang extra plates on (weighted pull-up, dip)
+//  - "assist" machine that REMOVES weight; a bigger number is easier
+//  - "none"   pure bodyweight, reps only, no weight field
+export type WeightMode = "total" | "each" | "added" | "assist" | "none";
+
 export interface Exercise {
   id: string;
   name: string;
@@ -30,6 +39,8 @@ export interface Exercise {
   secondary?: MuscleGroup[];
   equipment: Equipment;
   type: ExerciseType;
+  /** override the equipment-derived weight-entry mode when it would be wrong */
+  load?: WeightMode;
   alternatives: string[];
 }
 
@@ -339,6 +350,7 @@ export const EXERCISES: Exercise[] = [
     secondary: ["biceps", "core"],
     equipment: "bodyweight",
     type: "compound",
+    load: "added",
     alternatives: [
       "lat-pulldown",
       "assisted-pull-up",
@@ -391,10 +403,25 @@ export const EXERCISES: Exercise[] = [
     secondary: ["biceps"],
     equipment: "machine",
     type: "compound",
+    load: "assist",
     alternatives: [
       "pull-up",
       "lat-pulldown",
       "cable-pull-down",
+    ],
+  },
+  {
+    id: "assisted-chin-up",
+    name: "Assisted Chin-Up",
+    muscleGroup: "back",
+    secondary: ["biceps"],
+    equipment: "machine",
+    type: "compound",
+    load: "assist",
+    alternatives: [
+      "chin-up",
+      "assisted-pull-up",
+      "lat-pulldown",
     ],
   },
   {
@@ -812,6 +839,7 @@ export const EXERCISES: Exercise[] = [
     secondary: ["chest", "shoulders"],
     equipment: "bodyweight",
     type: "compound",
+    load: "added",
     alternatives: [
       "close-grip-bench-press",
       "cable-tricep-pushdown",
@@ -920,6 +948,7 @@ export const EXERCISES: Exercise[] = [
     secondary: ["glutes", "core"],
     equipment: "dumbbell",
     type: "compound",
+    load: "total", // one dumbbell held in both hands, not one per hand
     alternatives: [
       "barbell-back-squat",
       "leg-press",
@@ -934,6 +963,7 @@ export const EXERCISES: Exercise[] = [
     secondary: ["glutes", "core"],
     equipment: "kettlebell",
     type: "compound",
+    load: "total", // one kettlebell held in both hands, not one per hand
     alternatives: [
       "dumbbell-goblet-squat",
       "barbell-back-squat",
@@ -1020,6 +1050,7 @@ export const EXERCISES: Exercise[] = [
     secondary: ["glutes", "hamstrings"],
     equipment: "bodyweight",
     type: "compound",
+    load: "added", // hold a dumbbell in each hand to add load
     alternatives: [
       "dumbbell-lunge",
       "barbell-lunge",
@@ -1190,6 +1221,7 @@ export const EXERCISES: Exercise[] = [
     secondary: ["hamstrings"],
     equipment: "bodyweight",
     type: "compound",
+    load: "added", // rest a dumbbell or plate on the hips to add load
     alternatives: [
       "barbell-hip-thrust",
       "dumbbell-hip-thrust",
@@ -1591,7 +1623,8 @@ export const EXERCISES: Exercise[] = [
     secondary: ["biceps"],
     equipment: "bodyweight",
     type: "compound",
-    alternatives: ["pull-up", "lat-pulldown", "assisted-pull-up"],
+    load: "added",
+    alternatives: ["pull-up", "assisted-chin-up", "lat-pulldown", "assisted-pull-up"],
   },
   {
     id: "inverted-row",

@@ -53,6 +53,15 @@ export function WelcomeWizard() {
           body: JSON.stringify({ weight: w, loggedAt: todayISO() }),
         });
       }
+      // Queue a program that fits their weekly frequency, so the very first home
+      // screen already answers "what do I do" with a real day, not a blank slate.
+      try {
+        const prog = days <= 3 ? "fullbody-3x" : days === 4 ? "upper-lower" : "ppl";
+        localStorage.setItem("gymbud:program", prog);
+        localStorage.setItem("gymbud:program-day", "0");
+      } catch {
+        /* storage unavailable — home just shows the "follow a program" nudge */
+      }
       router.push("/");
       router.refresh();
     } catch (e) {

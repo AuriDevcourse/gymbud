@@ -1,17 +1,25 @@
 "use client";
 
 import { useEffect, useRef, useState, type MutableRefObject } from "react";
-import { ArrowLeftRight, Dices, FlaskConical, PlayCircle, Trash2 } from "lucide-react";
+import { ArrowLeftRight, Dices, FlaskConical, Info, PlayCircle, Trash2, TrendingUp } from "lucide-react";
 import { Stepper } from "./stepper";
 import { CoachBadge } from "./coach-badge";
 import { DemoSheet } from "./demo";
+import { MuscleInfoSheet } from "./muscle-info-sheet";
 import { Sheet } from "./sheet";
 import { Button } from "./ui";
-import { EXERCISES_BY_ID } from "@/lib/exercise-library";
+import { EXERCISES_BY_ID, type Exercise } from "@/lib/exercise-library";
+import {
+  doseCaption,
+  hasWeight,
+  repRangeFor,
+  weightLabel,
+  weightMode,
+  weightStep,
+} from "@/lib/loading";
 import {
   EQUIPMENT_LABELS,
   MUSCLE_LABELS,
-  REP_RANGE,
   SET_TYPE_LABELS,
   type Goal,
   type Recommendation,
@@ -34,6 +42,7 @@ export function ExerciseCard({
   lastData,
   targetSets,
   commitRef,
+  onValues,
   onAddSet,
   onDeleteSet,
   onEditSet,
@@ -49,6 +58,8 @@ export function ExerciseCard({
   targetSets: number;
   /** the parent's bottom-bar "Next set" button fires whatever we register here */
   commitRef: MutableRefObject<(() => void) | null>;
+  /** report live composer values up so the parent can label the log button */
+  onValues?: (weight: number, reps: number, showWeight: boolean) => void;
   onAddSet: (weight: number, reps: number, type: SetType) => void;
   onDeleteSet: (setId: number) => void;
   onEditSet: (setId: number, weight: number, reps: number, type: SetType) => void;
@@ -57,8 +68,10 @@ export function ExerciseCard({
   onRemove: () => void;
 }) {
   const ex = EXERCISES_BY_ID[se.exerciseId];
-  const isBW = ex?.equipment === "bodyweight";
-  const step = unit === "kg" ? 2.5 : 5;
+  const mode = ex ? weightMode(ex) : "total";
+  const showWeight = ex ? hasWeight(ex) : true;
+  const step = ex ? weightStep(ex, unit) : unit === "kg" ? 2.5 : 5;
+  const wl = ex ? weightLabel(ex, unit) : { label: `Weight (${unit})` };
 
   // set being edited (tap a logged set to fix a mistake)
   const [editing, setEditing] = useState<SetLog | null>(null);
@@ -75,16 +88,18 @@ export function ExerciseCard({
   // Prefill the composer from this exercise's last set, else last time / coach.
   const lastThisSession = se.sets[se.sets.length - 1];
   const lastTime = lastData?.last?.sets[lastData.last.sets.length - 1];
-  const initialWeight =
-    lastThisSession?.weight ??
-    lastData?.target.suggestedWeight ??
-    lastTime?.weight ??
-    (isBW ? 0 : 20);
+  const initialWeight = !showWeight
+    ? 0
+    : (lastThisSession?.weight ??
+      lastData?.target.suggestedWeight ??
+      lastTime?.weight ??
+      (mode === "added" ? 0 : 20));
   const initialReps = lastThisSession?.reps ?? lastTime?.reps ?? 8;
 
   const [weight, setWeight] = useState(initialWeight);
   const [reps, setReps] = useState(initialReps);
   const [demoOpen, setDemoOpen] = useState(false);
+  const [muscleOpen, setMuscleOpen] = useState(false);
   const adjust = (d: number) =>
     setWeight((w) => Math.max(0, Math.round((w + d) * 100) / 100));
 
@@ -104,13 +119,19 @@ export function ExerciseCard({
         <div className="min-w-0">
           <h3 className="display truncate text-lg font-semibold">{ex.name}</h3>
           <div className="mt-1 flex flex-wrap items-center gap-1.5 text-[0.7rem] font-medium text-muted">
-            <span className="rounded-full bg-surface-2 px-2 py-0.5">
+            <button
+              onClick={() => setMuscleOpen(true)}
+              aria-label={`What is the ${MUSCLE_LABELS[ex.muscleGroup]} and what does it do`}
+              className="flex items-center gap-1 rounded-full bg-surface-2 px-2 py-0.5 text-accent active:bg-surface-3"
+            >
               {MUSCLE_LABELS[ex.muscleGroup]}
-            </span>
+              <Info size={11} aria-hidden="true" />
+            </button>
             <span className="rounded-full bg-surface-2 px-2 py-0.5">
               {EQUIPMENT_LABELS[ex.equipment]}
             </span>
           </div>
+          <p className="mt-1 text-[0.7rem] text-muted">{doseCaption(goal, ex.type)}</p>
         </div>
         <div className="flex shrink-0 gap-1">
           <button
@@ -138,12 +159,19 @@ export function ExerciseCard({
       </div>
 
       {/* The loud part: what to actually do on this exercise right now. */}
-      <Prescription lastData={lastData} unit={unit} goal={goal} isBW={isBW} />
+      <Prescription lastData={lastData} unit={unit} goal={goal} ex={ex} />
 
 
       {/* composer FIRST so adding a set (which grows the list below) never
           shifts the controls you're actually using */}
-      <RegisterCommit commitRef={commitRef} weight={weight} reps={reps} onAdd={onAddSet} />
+      <RegisterCommit
+        commitRef={commitRef}
+        weight={weight}
+        reps={reps}
+        showWeight={showWeight}
+        onAdd={onAddSet}
+        onValues={onValues}
+      />
       <div className="px-4 pb-5 pt-1">
         {/* key by set number so each "Next set" fades in as a fresh window */}
         <div key={se.sets.length} className="animate-fade">
@@ -156,35 +184,38 @@ export function ExerciseCard({
             </p>
           )}
           <div className="mt-3 flex items-start gap-2">
-            <Stepper
-              label={isBW ? `Added (${unit})` : `Weight (${unit})`}
-              value={weight}
-              onChange={setWeight}
-              step={step}
-            />
+            {showWeight && (
+              <Stepper label={wl.label} value={weight} onChange={setWeight} step={step} />
+            )}
             <Stepper label="Reps" value={reps} onChange={setReps} step={1} min={1} />
           </div>
 
+          {showWeight && wl.hint && (
+            <p className="mt-1.5 text-center text-[0.7rem] text-muted">{wl.hint}</p>
+          )}
+
           {/* fine weight adjust — sits under the weight column */}
-          <div className="mt-2 flex gap-2">
-            <div className="flex flex-1 justify-center gap-2">
-              <button
-                onClick={() => adjust(-1.25)}
-                aria-label={`Decrease weight by 1.25 ${unit}`}
-                className="stat-num rounded-full border border-border bg-surface-2 px-3 py-1 text-xs text-foreground active:bg-surface-3"
-              >
-                −1.25
-              </button>
-              <button
-                onClick={() => adjust(1.25)}
-                aria-label={`Increase weight by 1.25 ${unit}`}
-                className="stat-num rounded-full border border-border bg-surface-2 px-3 py-1 text-xs text-foreground active:bg-surface-3"
-              >
-                +1.25
-              </button>
+          {showWeight && (
+            <div className="mt-2 flex gap-2">
+              <div className="flex flex-1 justify-center gap-2">
+                <button
+                  onClick={() => adjust(-1.25)}
+                  aria-label={`Decrease weight by 1.25 ${unit}`}
+                  className="stat-num rounded-full border border-border bg-surface-2 px-3 py-1 text-xs text-foreground active:bg-surface-3"
+                >
+                  −1.25
+                </button>
+                <button
+                  onClick={() => adjust(1.25)}
+                  aria-label={`Increase weight by 1.25 ${unit}`}
+                  className="stat-num rounded-full border border-border bg-surface-2 px-3 py-1 text-xs text-foreground active:bg-surface-3"
+                >
+                  +1.25
+                </button>
+              </div>
+              <div className="flex-1" aria-hidden="true" />
             </div>
-            <div className="flex-1" aria-hidden="true" />
-          </div>
+          )}
         </div>
       </div>
 
@@ -192,9 +223,7 @@ export function ExerciseCard({
       {se.sets.length > 0 && (
         <div className="border-t border-border/60 p-4">
           <div className="mb-1.5">
-            <span className="text-xs font-semibold uppercase tracking-widest text-muted">
-              Done sets · tap to edit
-            </span>
+            <span className="text-[0.7rem] text-muted">Done sets · tap to edit</span>
           </div>
           {/* reserve room for all target rows so logging a set never grows the
               card (which would nudge the buttons below) */}
@@ -231,16 +260,19 @@ export function ExerciseCard({
         name={ex.name}
       />
 
+      <MuscleInfoSheet
+        open={muscleOpen}
+        onClose={() => setMuscleOpen(false)}
+        muscle={ex.muscleGroup}
+      />
+
       <Sheet open={!!editing} onClose={() => setEditing(null)} title="Edit set">
         {editing && (
           <div>
             <div className="flex items-start gap-2">
-              <Stepper
-                label={isBW ? `Added (${unit})` : `Weight (${unit})`}
-                value={eW}
-                onChange={setEW}
-                step={step}
-              />
+              {showWeight && (
+                <Stepper label={wl.label} value={eW} onChange={setEW} step={step} />
+              )}
               <Stepper label="Reps" value={eR} onChange={setER} step={1} min={1} />
             </div>
             <div className="mt-3 flex gap-1.5">
@@ -295,19 +327,26 @@ function RegisterCommit({
   commitRef,
   weight,
   reps,
+  showWeight,
   onAdd,
+  onValues,
 }: {
   commitRef: MutableRefObject<(() => void) | null>;
   weight: number;
   reps: number;
+  showWeight: boolean;
   onAdd: (weight: number, reps: number, type: SetType) => void;
+  onValues?: (weight: number, reps: number, showWeight: boolean) => void;
 }) {
   useEffect(() => {
     commitRef.current = () => onAdd(weight, reps, "normal");
+    // report the live composer values up so the primary button can show exactly
+    // what it will log ("Log 62.5 × 10") — the crisp confirm Strong/Hevy nail.
+    onValues?.(weight, reps, showWeight);
     return () => {
       commitRef.current = null;
     };
-  }, [commitRef, weight, reps, onAdd]);
+  }, [commitRef, weight, reps, showWeight, onAdd, onValues]);
   return null;
 }
 
@@ -322,15 +361,16 @@ function Prescription({
   lastData,
   unit,
   goal,
-  isBW,
+  ex,
 }: {
   lastData?: LastData;
   unit: Unit;
   goal: Goal;
-  isBW: boolean;
+  ex: Exercise;
 }) {
   if (!lastData) return null; // last-time data still loading
-  const range = REP_RANGE[goal];
+  const range = repRangeFor(goal, ex.type);
+  const mode = weightMode(ex);
 
   // First time on this exercise: don't fake a number, calibrate.
   if (!lastData.last) {
@@ -341,8 +381,10 @@ function Prescription({
           <span className="display font-semibold">Test set</span>
         </div>
         <p className="mt-1 text-sm text-muted">
-          First time on this one. Pick a weight you can do for {range.low} to {range.high} reps and
-          log it. Next session I&apos;ll tell you the weight.
+          First time on this one.{" "}
+          {mode === "none"
+            ? `Do as many clean reps as you can (aim ${range.low} to ${range.high}) and log it.`
+            : `Pick a weight you can do for ${range.low} to ${range.high} reps and log it. Next session I'll tell you the weight.`}
         </p>
       </div>
     );
@@ -350,22 +392,45 @@ function Prescription({
 
   const t = lastData.target;
   const last = topOf(lastData.last.sets);
+  // What the big number means, given how this lift is loaded.
+  const headline =
+    mode === "none"
+      ? "Bodyweight"
+      : t.suggestedWeight !== null
+        ? fmtWeight(t.suggestedWeight, unit)
+        : "—";
+  // Make the progression felt: how much heavier than last time is the target?
+  const bump =
+    mode !== "none" && t.suggestedWeight !== null && last.weight > 0
+      ? Math.round((t.suggestedWeight - last.weight) * 100) / 100
+      : 0;
   return (
-    <div className="mx-4 mb-3 rounded-[var(--radius-md)] border border-border bg-surface-2 px-3 py-3">
+    <div className="mx-4 mb-3 rounded-[var(--radius-md)] border border-border border-l-[3px] border-l-accent bg-surface-2 px-3.5 py-3 shadow-[var(--shadow-card)]">
       <div className="flex items-center justify-between gap-2">
-        <div className="flex items-baseline gap-2">
-          <span className="stat-num text-2xl font-bold text-accent">
-            {isBW ? "Bodyweight" : t.suggestedWeight !== null ? fmtWeight(t.suggestedWeight, unit) : "—"}
+        <div className="min-w-0">
+          <span className="stat-num block text-4xl font-bold leading-none text-accent">
+            {headline}
           </span>
-          <span className="text-sm text-muted">
+          <span className="mt-1 block text-sm text-muted">
+            {mode === "each" && headline !== "—" ? "per hand · " : ""}
+            {mode === "assist" && headline !== "—" ? "assist · " : ""}
             aim {range.low} to {range.high} reps
           </span>
         </div>
         <CoachBadge action={t.action} />
       </div>
-      <p className="mt-1.5 text-xs text-muted">
-        Last time: {fmtWeight(last.weight, unit)} × {last.reps}
-      </p>
+      <div className="mt-1.5 flex items-center gap-2">
+        <p className="text-xs text-muted">
+          Last time: {last.weight > 0 ? `${fmtWeight(last.weight, unit)} × ` : ""}
+          {last.weight > 0 ? last.reps : `${last.reps} reps`}
+        </p>
+        {bump > 0 && (
+          <span className="inline-flex items-center gap-0.5 rounded-full bg-accent/15 px-1.5 py-0.5 text-[0.65rem] font-semibold text-accent">
+            <TrendingUp size={11} aria-hidden="true" />
+            +{fmtWeight(bump, unit)} {unit}
+          </span>
+        )}
+      </div>
     </div>
   );
 }

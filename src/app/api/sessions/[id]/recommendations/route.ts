@@ -27,6 +27,8 @@ export async function GET(
         working(last?.sets ?? []),
         profile.goal,
         profile.unit,
+        null,
+        EXERCISES_BY_ID[se.exerciseId],
       );
       return {
         exerciseId: se.exerciseId,

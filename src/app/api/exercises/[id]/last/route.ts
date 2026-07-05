@@ -29,6 +29,7 @@ export async function GET(
     profile.goal,
     profile.unit,
     last?.difficulty,
+    EXERCISES_BY_ID[id],
   );
 
   return ok({ last, target });

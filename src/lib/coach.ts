@@ -5,6 +5,7 @@ import {
   type Exercise,
   type MuscleGroup,
 } from "./exercise-library";
+import { repRangeFor, weightStep } from "./loading";
 import { REP_RANGE, type Difficulty, type Goal, type Recommendation, type Unit } from "./types";
 
 type SetInput = { weight: number; reps: number };
@@ -30,6 +31,7 @@ export function recommendNext(
   goal: Goal,
   unit: Unit,
   lastDifficulty?: Difficulty | null,
+  ex?: Exercise, // when given, rep target + weight jump match this exercise
 ): Recommendation {
   const cur = topSet(thisSets);
   const last = topSet(lastSets);
@@ -43,8 +45,8 @@ export function recommendNext(
     };
   }
 
-  const range = REP_RANGE[goal];
-  const step = increment(unit);
+  const range = ex ? repRangeFor(goal, ex.type) : REP_RANGE[goal];
+  const step = ex ? weightStep(ex, unit) : increment(unit);
   const u = unit;
 
   // Below the bottom of the range -> too heavy, ease off and rebuild.

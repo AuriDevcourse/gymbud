@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { Minus, Plus } from "lucide-react";
 
 export function Stepper({
@@ -22,6 +23,12 @@ export function Stepper({
   const clamp = (v: number) => Math.min(max, Math.max(min, v));
   const set = (v: number) => onChange(clamp(Math.round(v * 100) / 100));
 
+  // While the field is focused we show the raw text the user is typing (draft),
+  // so an existing "0" can be typed straight over instead of becoming "012".
+  // `.select()` alone is unreliable on mobile keyboards, so we clear on focus.
+  const [draft, setDraft] = useState<string | null>(null);
+  const shown = draft ?? (Number.isFinite(value) ? String(value) : "0");
+
   return (
     <div className="flex-1">
       <span className="mb-1 block text-center text-[0.7rem] font-medium uppercase tracking-wider text-muted">
@@ -41,9 +48,17 @@ export function Stepper({
             type="number"
             inputMode="decimal"
             aria-label={label}
-            value={Number.isFinite(value) ? value : 0}
-            onFocus={(e) => e.currentTarget.select()}
-            onChange={(e) => set(parseFloat(e.target.value) || 0)}
+            value={shown}
+            onFocus={(e) => {
+              // start a blank draft so the first keystroke replaces the value
+              setDraft("");
+              e.currentTarget.select();
+            }}
+            onChange={(e) => {
+              setDraft(e.target.value);
+              set(parseFloat(e.target.value) || 0);
+            }}
+            onBlur={() => setDraft(null)}
             className={`stat-num h-12 w-full rounded-[var(--radius-md)] border border-border bg-background text-center text-2xl font-bold text-foreground outline-none focus:border-accent ${
               suffix ? "pr-7" : ""
             }`}

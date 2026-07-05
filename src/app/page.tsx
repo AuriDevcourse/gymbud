@@ -1,8 +1,10 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { ChevronRight, Dumbbell, Flame, Scale, TrendingUp } from "lucide-react";
-import { Card } from "@/components/ui";
+import { Card, SectionTitle } from "@/components/ui";
 import { SuggestionCard } from "@/components/suggestion-card";
+import { ProgramHomeCard } from "@/components/program-home-card";
+import { RecoveryMap } from "@/components/body-map";
 import { RunLogger } from "@/components/run-logger";
 import {
   activeSession,
@@ -39,12 +41,13 @@ export default async function Home() {
   const bwTrend = weightTrend(bwList);
 
   return (
-    <div className="flex flex-col gap-5 pb-4">
+    <div className="flex flex-col gap-6 pb-4">
       <header>
         <p className="text-sm text-muted">{greeting()}</p>
         <h1 className="display text-2xl font-bold">
           {profile.name ? profile.name : "Ready to train"}
         </h1>
+        <p className="mt-0.5 text-sm text-muted-strong">{motivation(stats, lastDone)}</p>
       </header>
 
       {active && (
@@ -85,7 +88,10 @@ export default async function Home() {
         </Card>
       </Link>
 
-      {/* Suggested workout (client: supports Shuffle for variety) */}
+      {/* Your program — the structured "what do I do next" answer */}
+      <ProgramHomeCard hasActive={!!active} />
+
+      {/* Or a one-off suggested workout (client: supports Shuffle for variety) */}
       <SuggestionCard
         goal={profile.goal}
         daysPerWeek={profile.daysPerWeek}
@@ -94,20 +100,48 @@ export default async function Home() {
         hasActive={!!active}
       />
 
+      {/* Recovery heatmap — which muscles are fresh vs still worked */}
+      <Card className="px-3 py-4">
+        <SectionTitle right={<span className="text-xs normal-case tracking-normal text-muted">green = ready</span>}>
+          Muscle recovery
+        </SectionTitle>
+        <RecoveryMap daysSince={daysSince} />
+      </Card>
+
       <RunLogger />
 
       <Link
         href="/exercises"
-        className="flex items-center justify-between rounded-[var(--radius-lg)] border border-border bg-surface px-4 py-3.5"
+        className="group flex items-center justify-between rounded-[var(--radius-lg)] border border-border bg-surface px-4 py-3.5 shadow-[var(--shadow-card)] transition hover:border-border/80 hover:bg-surface-2 active:scale-[0.99]"
       >
         <span className="flex items-center gap-2 font-medium">
           <Dumbbell size={18} className="text-accent" aria-hidden="true" />
           Browse exercise library
         </span>
-        <ChevronRight className="text-muted" aria-hidden="true" />
+        <ChevronRight
+          className="text-muted transition-transform group-hover:translate-x-0.5"
+          aria-hidden="true"
+        />
       </Link>
     </div>
   );
+}
+
+// A warm, honest one-liner under the greeting. Rewards a streak, nudges a
+// return, welcomes a beginner — never fake enthusiasm.
+function motivation(
+  stats: { streak: number; thisWeekSets: number; totalWorkouts: number },
+  lastDone: { startedAt: string } | undefined,
+): string {
+  if (stats.totalWorkouts === 0) return "First session's the hardest. Let's get it logged.";
+  if (stats.streak >= 2) {
+    const wk = stats.thisWeekSets > 0 ? ` · ${stats.thisWeekSets} sets this week` : "";
+    return `${stats.streak}-week streak going${wk}. Keep it alive.`;
+  }
+  const days = lastDone ? calendarDaysAgo(lastDone.startedAt) : 99;
+  if (days >= 4) return "Been a few days. A short session still counts.";
+  if (days >= 1) return "Good to see you back. Ready when you are.";
+  return "Nice work today. Come back fresh.";
 }
 
 function shortAgo(s: string): string {
@@ -128,7 +162,7 @@ function Stat({
   return (
     <div className="flex flex-1 flex-col items-center gap-1">
       <span className={accent ? "text-accent" : "text-muted"}>{icon}</span>
-      <span className="stat-num text-lg font-bold leading-none">{value}</span>
+      <span className="stat-num text-2xl font-bold leading-none">{value}</span>
     </div>
   );
 }

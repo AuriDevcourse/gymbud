@@ -9,7 +9,7 @@ export function Card({
 }) {
   return (
     <div
-      className={`rounded-[var(--radius-lg)] border border-border bg-surface p-4 ${className}`}
+      className={`rounded-[var(--radius-lg)] border border-border bg-surface p-4 shadow-[var(--shadow-card)] ${className}`}
     >
       {children}
     </div>
@@ -67,7 +67,7 @@ export function Button({
   ...rest
 }: ButtonProps) {
   const variants = {
-    accent: "bg-accent text-accent-foreground hover:brightness-95 font-semibold",
+    accent: "bg-accent text-accent-foreground hover:brightness-95 font-semibold shadow-[var(--shadow-accent)]",
     surface: "bg-surface-2 text-foreground hover:bg-surface-3 border border-border",
     outline: "bg-transparent text-foreground border border-border hover:bg-surface-2",
     ghost: "bg-transparent text-muted hover:text-foreground",
@@ -100,13 +100,16 @@ export function EmptyState({
   action?: ReactNode;
 }) {
   return (
-    <div className="flex flex-col items-center gap-3 rounded-[var(--radius-lg)] border border-dashed border-border bg-surface/40 px-6 py-10 text-center">
-      <div className="text-muted" aria-hidden="true">
+    <div className="flex flex-col items-center gap-1.5 rounded-[var(--radius-lg)] border border-border bg-surface/60 px-6 py-10 text-center shadow-[var(--shadow-card)]">
+      <div
+        className="mb-1.5 grid h-12 w-12 place-items-center rounded-full bg-surface-2 text-accent"
+        aria-hidden="true"
+      >
         {icon}
       </div>
-      <p className="font-medium text-foreground">{title}</p>
-      {hint && <p className="-mt-2 text-sm text-muted">{hint}</p>}
-      {action}
+      <p className="text-base font-semibold text-foreground">{title}</p>
+      {hint && <p className="max-w-[26ch] text-sm text-muted">{hint}</p>}
+      {action && <div className="mt-2.5">{action}</div>}
     </div>
   );
 }

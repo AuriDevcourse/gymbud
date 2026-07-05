@@ -1,5 +1,61 @@
 # GymBud — Session Handoff
 
+## SESSION 2026-07-05 (part 2) — competitive overhaul toward 90/100 (UNCOMMITTED, on `main`)
+Goal from Auri: research the loved apps, rate them + us, then drastically improve feel/look/features toward 90/100, emotion-first, without deleting past workouts. Full analysis in `COMPETITIVE-ANALYSIS.md`.
+
+Researched Hevy (87), Fitbod (86), Boostcamp (83), Strong (82). GymBud rated ~66 before, **~76 after iteration 1**. The winning pattern: pre-fill + auto rest timer, "tell me what to do + auto-progress me," and **make the finish a reward**. Our under-served axis was emotion (58).
+
+**Iteration 1 shipped (lint + tsc + build all clean, home verified via curl):**
+- **Celebratory finish** — `FinishSummary` now leads with a hero row (kg moved · sets · min) + "N new PRs" badge (tracked via new `prNames` state in `WorkoutClient`, fed from the per-set `pr` flag). Difficulty rating demoted below. New `HeroStat` helper. `workout-client.tsx`.
+- **Free recovery heatmap** — new `RecoveryMap` in `body-map.tsx` (front+back silhouettes, each muscle coloured by `daysSinceByMuscle`: green ready / amber recovering / orange worked, + legend). Added as a card on `page.tsx`. This is Fitbod's paywalled signature, free.
+- **Visible auto-progression** — `Prescription` (exercise-card) shows a "+Xkg" chip when today's suggested weight beats last time.
+- **Streak-aware greeting** — `motivation()` on home returns a warm one-liner (streak reward / return nudge / beginner welcome).
+- **Muscle images** (part 1 of session): 8/11 groups now real Anatomography renders (`public/muscles/*.png`, CC-BY-SA credited), SVG fallback for chest/core/forearms. `BodyMap` picks photo vs SVG.
+
+**Iteration 2 shipped (lint + tsc + build clean, /programs + home verified via curl):** the **program runner** — NO new tables (coach auto-progresses from history). `src/lib/programs.ts` (3 programs, IDs validated), `/programs` screen (`programs-client.tsx`, browse/follow/start/"up next" cursor in localStorage), home `program-home-card.tsx` (useSyncExternalStore, no hydration flash), Programs nav tab, and onboarding now auto-queues a program by weekly frequency. Rating ~76 → **~80** (guidance 80→87, retention 68→80, onboarding 70→80).
+
+**Iteration 3 shipped (lint + tsc + build clean):** design-polish pass from a ui-polish-reviewer audit — elevation tokens (`--shadow-card/raised/accent`) on Card/workout-card/prescription/nav/empty-states; hero numbers (prescription `text-4xl`, home stats `text-2xl`); accent-glow primary buttons + 3px left-accent prescription edge; anchored bottom nav (active top-bar + icon chip); global press `scale(0.975)` + removed per-component overrides; upgraded EmptyState; framed the anatomy render; hover/press micro-interactions on link rows. Rating ~80 → **~83** (design 76→86, emotional 83→85). Now level with Boostcamp (83). Font is Geist+Oswald (intentional, not a defect).
+
+**Iteration 4 shipped (lint + tsc + build clean):** logging clarity — the primary bottom-bar button now reads **"✓ Log 62.5 × 10"** (Strong/Hevy-style confirm-the-prefilled-set), live composer values reported up via a guarded memoized `onValues` (no loop, no set-state-in-effect); label-noise fix; perceptible ambient bg glow. Rating ~83 → **~84** (logging 76→82, design 86→88). Beats Strong (82) + Boostcamp (83).
+
+**Iteration 5 shipped (lint + tsc + build clean):** "Share result" button on the finish screen (Web Share API + clipboard fallback, session stats). Fair re-rating to **~86 = Fitbod's tier** (a great-app benchmark), beating Strong (82) + Boostcamp (83), tying Fitbod (86), 1 off Hevy (87). Earlier ~84 was conservative — over-weighted the two unseen items.
+
+**NEXT (last mile 86→90):** two levers left, both need a LIVE BROWSER to iterate visually — the Chrome extension was NOT connected this run (all verification was build + curl HTML): (1) **logging set-row redesign** (Strong-style tap-to-confirm, logging 76→90), (2) **final design pass** (section-label unification, spacing rhythm, radius scale, bg glow, label noise; 86→92) + screenshot-refine. Optional: PR share card (canvas + Web Share). Connect claude.ai/chrome to finish.
+
+Still uncommitted on `main`; do not push without Auri (auto-deploys to Vercel). Outstanding infra: `APP_PASSCODE` + `GEMINI_API_KEY` on Vercel.
+
+---
+
+## SESSION 2026-07-05 — per-equipment weight loading + muscle info (UNCOMMITTED, on `main`)
+One-line state: finished the feature the pre-restart session left half-built. Lint + `tsc` + `npm run build` all clean. NOT committed yet — work is on `main` working tree (branch before commit per WORKFLOW r1).
+
+What this feature does: stop treating a barbell squat, a pair of dumbbells and a plank identically. Each lift now knows how its weight is entered and dosed.
+- **New `src/lib/loading.ts`** — single source of truth for load semantics derived from equipment (overridable per-exercise via a new `load` field):
+  - `weightMode(ex)` → `total | each | added | assist | none` (dumbbell/kettlebell = each hand; bodyweight = none; else total).
+  - `weightLabel` gives the field label + hint ("Weight / hand", "Added", "Assist", "Bodyweight") so "40" is never ambiguous.
+  - `weightStep` = per-equipment +/- jump (dumbbell 2, barbell/smith 5, else 2.5 kg; lb doubled-ish).
+  - `repRangeFor(goal,type)` + `targetSetsFor(goal,type)` — compounds heavier/lower reps + one more set, isolation lighter/higher. `doseCaption` = the "Compound · 4 sets × 6 to 10 reps" line.
+- **`exercise-library.ts`** — new `WeightMode` type + optional `load` override; tagged weighted-bodyweight lifts (pull-up, dip, chin-up, bulgarian split squat, hip thrust) as `added`, assisted machines as `assist`, goblet/kb squat as `total` (held two-handed), added new `assisted-chin-up` exercise.
+- **`coach.ts#recommendNext`** — takes optional `ex`; when given, its rep range + weight step come from `loading.ts` so the prescription and the progression math always agree. Both API routes (`/exercises/[id]/last`, `/sessions/[id]/recommendations`) now pass the exercise.
+- **`exercise-card.tsx`** — composer hides the weight field entirely for bodyweight lifts, uses the right label/hint/step, and the Prescription banner shows "per hand" / "assist" qualifiers + a bodyweight-aware "Last time" line + the dose caption under the header.
+- **`stepper.tsx`** — focus now starts a blank draft (clears the field) so you type "14" straight over "0"/"20" instead of "012"; commits on change, restores on blur. Fixes the mobile select-on-focus flakiness noted last session.
+- **NEW `muscle-info-sheet.tsx`** (this session — was the missing piece that crashed the build) — tapping the muscle tag on a card opens a sheet explaining where the muscle is, what it does, and why it matters, in plain B2 English, for all 11 groups. Lucide icons, no emojis.
+
+### Follow-up fixes same session (from Auri's real-usage list)
+Auri listed the exact issues that prompted this work; mapped + fixed:
+- **Rest timer didn't start on "Next set" / didn't reset after a set** (root cause found) — `RestBar` seeded its countdown from `useState(endsAt)`, whose initializer runs once at mount, so a second set's fresh `endsAt` prop was ignored and the bar stayed on the old expired time. Rewrote it to DERIVE `left`/`cap` from the `endsAt` prop + a ticking `now` (dropped the redundant `end`/`cap` state; +/-15 already round-trips through `onChange` to the parent, the source of truth). Now every logged set snaps the bar back to full. Lint-clean (no set-state-in-effect).
+- **"012" when typing weight over a 0** — stepper draft fix (see above) blanks the field on focus so the first keystroke replaces it.
+- **"Why is every exercise 4 sets / 8-12 reps?"** — `repRangeFor`/`targetSetsFor` now split compound vs isolation, and `doseCaption` prints the actual dose per card ("Compound · 4 sets × 6 to 10").
+- **Dumbbell 2 / barbell 5 / other 2.5 increments** — `weightStep` in loading.ts.
+- **"Chest press: 20 or 40kg?" + bodyweight-vs-weighted logic** — `weightLabel` hint ("total load on the bar or stack") + weight field hidden entirely on pure-bodyweight lifts.
+- **Lunges: total or each hand?** — `added` mode hint now spells it out ("total extra weight you hold or wear · two dumbbells = add them together").
+- **Assisted chin-up for the weaker end** — added `assisted-chin-up` (machine, `load: "assist"`), reachable via the swap button on chin-up + the /exercises library.
+- **"Show a picture of the muscle"** — new `body-map.tsx`: hand-drawn SVG figure (front/back) that highlights the tapped muscle, embedded at the top of the muscle info sheet. No image assets / no AI gen needed (free-tier image gen is blocked anyway), theme-aware via CSS vars.
+
+Next steps: 1) review on phone (`npm run dev`), 2) commit + push `main` (auto-deploys to Vercel — Auri's call), 3) still-outstanding infra from below: **`APP_PASSCODE` + `GEMINI_API_KEY` on Vercel** (items 1-2 of the ship checklist). Routines/templates still the big backlog item.
+
+---
+
 ## SESSION 2026-07-02 — SHIPPED to main (merge 852455c), auto-deploying on Vercel
 The whole 2026-07-02 branch (`fix/workout-ux-batch`, parts 1-4 below) was merged to `main` and pushed → Vercel prod deploy triggered. Verify after deploy:
 1. **APP_PASSCODE still NOT set on Vercel → app is OPEN to anyone with the URL** (holds personal data). Lock it: `vercel env add APP_PASSCODE production` + redeploy. STILL OUTSTANDING.
