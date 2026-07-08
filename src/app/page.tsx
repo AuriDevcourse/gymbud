@@ -98,6 +98,7 @@ export default async function Home() {
         daysPerWeek={profile.daysPerWeek}
         available={profile.equipment}
         daysSince={daysSince}
+        rotation={stats.totalWorkouts}
         hasActive={!!active}
       />
 

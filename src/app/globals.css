@@ -229,6 +229,11 @@ input[type="number"] {
   .demo-crossfade {
     animation: demo-fade 1.8s ease-in-out infinite alternate;
   }
+  /* rest-timer "time's up" flash — a couple of green pulses to catch the eye on
+     iPhone, where a vibration never fires */
+  .animate-rest-done {
+    animation: rest-done 0.7s ease-in-out 3;
+  }
 }
 
 @keyframes slide-up {
@@ -288,5 +293,14 @@ input[type="number"] {
   65%,
   100% {
     opacity: 1;
+  }
+}
+@keyframes rest-done {
+  0%,
+  100% {
+    background-color: var(--surface);
+  }
+  50% {
+    background-color: color-mix(in srgb, var(--good) 22%, var(--surface));
   }
 }

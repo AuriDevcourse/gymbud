@@ -42,13 +42,15 @@ export function ExerciseBrowser() {
         <input
           value={q}
           onChange={(e) => setQ(e.target.value)}
-          placeholder="Search 117 exercises"
+          placeholder={`Search ${EXERCISES.length} exercises`}
           aria-label="Search exercises"
           className="h-11 w-full rounded-[var(--radius-md)] border border-border bg-surface pl-10 pr-3 text-foreground outline-none focus:border-accent"
         />
       </div>
 
-      <div className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-1">
+      {/* Wrap instead of horizontal-scroll so every group (incl. Calves, Traps)
+          is visible at once — a scrolled-off chip reads as "no such exercises". */}
+      <div className="flex flex-wrap gap-2">
         <Pill active={muscle === "all"} onClick={() => setMuscle("all")}>
           All
         </Pill>

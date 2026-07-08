@@ -157,7 +157,7 @@ export function getAlternatives(
 // ── Workout suggestion ────────────────────────────────────────────────────
 const BUCKETS: Record<"push" | "pull" | "legs", MuscleGroup[]> = {
   push: ["chest", "shoulders", "triceps"],
-  pull: ["back", "biceps", "forearms"],
+  pull: ["back", "traps", "biceps", "forearms"],
   legs: ["quads", "hamstrings", "glutes", "calves"],
 };
 
@@ -202,10 +202,10 @@ const LENGTH_COUNT: Record<WorkoutLength, number> = { short: 4, medium: 6, long:
 
 const FOCUS_MUSCLES: Record<Exclude<WorkoutFocus, "auto">, MuscleGroup[]> = {
   full_body: ["quads", "back", "chest", "shoulders", "hamstrings", "core"],
-  upper: ["back", "chest", "shoulders", "biceps", "triceps"],
+  upper: ["back", "chest", "shoulders", "traps", "biceps", "triceps"],
   lower: ["quads", "hamstrings", "glutes", "calves"],
   push: ["chest", "shoulders", "triceps"],
-  pull: ["back", "biceps", "forearms"],
+  pull: ["back", "traps", "biceps", "forearms"],
   legs: ["quads", "hamstrings", "glutes", "calves"],
 };
 
@@ -228,6 +228,8 @@ export function suggestWorkout(opts: {
   available?: Equipment[];
   daysSince: Partial<Record<MuscleGroup, number>>; // days since each muscle trained
   seed?: number; // 0 = canonical pick; any other value = a randomized variation
+  rotation?: number; // sessions done so far — rotates the canonical pick so today
+  // isn't a carbon copy of last time (only used when seed === 0)
   focus?: WorkoutFocus; // explicit user choice; "auto"/undefined = decide below
   length?: WorkoutLength; // how much time you have; defaults to "medium"
 }): Suggestion {
@@ -267,7 +269,7 @@ export function suggestWorkout(opts: {
 
   const length = opts.length ?? "medium";
   const maxCount = LENGTH_COUNT[length] + (opts.goal === "fat_loss" ? 1 : 0);
-  const exercises = selectExercises(focus, available, opts.seed ?? 0, maxCount);
+  const exercises = selectExercises(focus, available, opts.seed ?? 0, maxCount, opts.rotation ?? 0);
   return { title, focus, exercises };
 }
 
@@ -285,17 +287,22 @@ function selectExercises(
   available: Equipment[],
   seed: number,
   maxCount: number,
+  rotation: number,
 ): Exercise[] {
   const picked: Exercise[] = [];
   const rng = makeRng(seed);
 
-  // seed 0 => the canonical "best" pick (free-weight compounds first);
-  // any other seed => a random valid pick, so each shuffle hits the same
-  // muscles with different exercises.
+  // seed 0 => the canonical pick, but ROTATED: rank candidates by equipment
+  // quality, then step through the top few by `rotation` (sessions done) so
+  // consecutive sessions vary the lift without dropping to a weak choice.
+  // any other seed => a random valid pick (the manual Shuffle button).
   const choose = (cands: Exercise[]): Exercise | undefined => {
     if (!cands.length) return undefined;
-    if (seed === 0)
-      return [...cands].sort((a, b) => equipmentRank(a) - equipmentRank(b))[0];
+    if (seed === 0) {
+      const ranked = [...cands].sort((a, b) => equipmentRank(a) - equipmentRank(b));
+      const topN = Math.min(3, ranked.length);
+      return ranked[rotation % topN];
+    }
     return cands[Math.floor(rng() * cands.length)];
   };
 

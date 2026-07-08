@@ -113,6 +113,7 @@ export const GOAL_LABELS: Record<Goal, string> = {
 export const MUSCLE_LABELS: Record<MuscleGroup, string> = {
   chest: "Chest",
   back: "Back",
+  traps: "Traps",
   shoulders: "Shoulders",
   biceps: "Biceps",
   triceps: "Triceps",

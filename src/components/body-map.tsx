@@ -35,6 +35,16 @@ const MAP: Record<MuscleGroup, { view: View; marks: React.ReactNode }> = {
       </>
     ),
   },
+  traps: {
+    view: "back",
+    // twin ropes from the base of the neck out toward each shoulder
+    marks: (
+      <>
+        <path d="M60 40 Q50 42 43 49 Q49 51 56 50 Q59 46 60 42 Z" />
+        <path d="M60 40 Q70 42 77 49 Q71 51 64 50 Q61 46 60 42 Z" />
+      </>
+    ),
+  },
   shoulders: {
     view: "front",
     marks: (
@@ -208,7 +218,7 @@ function recoveryColor(days: number | undefined): string {
 }
 
 const FRONT: MuscleGroup[] = ["chest", "shoulders", "biceps", "forearms", "core", "quads"];
-const BACK: MuscleGroup[] = ["back", "triceps", "glutes", "hamstrings", "calves"];
+const BACK: MuscleGroup[] = ["back", "traps", "triceps", "glutes", "hamstrings", "calves"];
 
 function HeatFigure({
   muscles,
