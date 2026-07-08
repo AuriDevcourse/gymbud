@@ -22,7 +22,9 @@ export function BottomNav() {
     <nav
       aria-label="Primary"
       className="fixed inset-x-0 bottom-0 z-50 border-t border-border bg-surface/90 shadow-[0_-8px_24px_-12px_rgba(0,0,0,0.7)] backdrop-blur-xl"
-      style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
+      // Clear the iPhone home indicator, but cap it: the full 34px inset left a
+      // big dead band under the labels. Half of it still keeps them tappable.
+      style={{ paddingBottom: "max(0.25rem, calc(env(safe-area-inset-bottom) - 0.5rem))" }}
     >
       <ul className="mx-auto flex w-full max-w-md items-stretch justify-around">
         {TABS.map(({ href, label, icon: Icon }) => {
@@ -34,7 +36,7 @@ export function BottomNav() {
                 href={href}
                 aria-label={label}
                 aria-current={active ? "page" : undefined}
-                className={`relative flex flex-col items-center gap-1 py-2.5 text-[0.68rem] font-medium transition-colors ${
+                className={`relative flex flex-col items-center gap-0.5 py-1.5 text-[0.68rem] font-medium transition-colors ${
                   active ? "text-accent" : "text-muted hover:text-foreground"
                 }`}
               >

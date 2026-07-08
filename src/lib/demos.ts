@@ -51,6 +51,7 @@ const EQUIP: Record<Equipment, string[]> = {
 const MUSCLE: Record<MuscleGroup, string[]> = {
   chest: ["chest"],
   back: ["lats", "middle back", "lower back"],
+  traps: ["traps"],
   shoulders: ["shoulders"],
   biceps: ["biceps"],
   triceps: ["triceps"],
@@ -63,17 +64,30 @@ const MUSCLE: Record<MuscleGroup, string[]> = {
 };
 const STOP = new Set(["barbell", "dumbbell", "cable", "machine", "smith", "band", "kettlebell"]);
 
+// Distinctive variant words. If OUR exercise has one and a candidate lacks it,
+// it's almost certainly the wrong variant (e.g. an "incline" press must not match
+// a flat bench photo) — penalise hard so we'd rather show no photo than a wrong one.
+const MODIFIERS = [
+  "incline", "decline", "seated", "standing", "reverse", "front", "overhead",
+  "romanian", "sumo", "bulgarian", "hack", "goblet", "preacher", "hammer",
+  "concentration", "spider", "deficit", "close", "wide", "single", "pause",
+];
+
+const norm = (s: string) => s.toLowerCase().replace(/-/g, " ");
+
 function bestMatch(ex: Exercise, db: DbEntry[]): DbEntry | null {
-  const exTokens = ex.name.toLowerCase().split(/\s+/).filter((w) => !STOP.has(w));
+  const exName = norm(ex.name);
+  const exTokens = exName.split(/\s+/).filter((w) => !STOP.has(w));
   const exSet = new Set(exTokens);
+  const exMods = MODIFIERS.filter((m) => exName.includes(m));
   const wantEquip = EQUIP[ex.equipment];
   const wantMuscle = MUSCLE[ex.muscleGroup];
   let best: DbEntry | null = null;
   let bestScore = -Infinity;
   for (const e of db) {
     if (!e.images?.length) continue;
-    const nameTokens = e.name.toLowerCase().split(/\s+/);
-    const name = e.name.toLowerCase();
+    const name = norm(e.name);
+    const nameTokens = name.split(/\s+/);
     let s = 0;
     let hits = 0;
     for (const tok of exTokens)
@@ -90,6 +104,8 @@ function bestMatch(ex: Exercise, db: DbEntry[]): DbEntry | null {
       else s -= 4;
     }
     if (e.primaryMuscles?.some((m) => wantMuscle.includes(m.toLowerCase()))) s += 2;
+    // Wrong-variant guard: every modifier our lift has must appear in the match.
+    for (const m of exMods) if (!name.includes(m)) s -= 6;
     for (const t of nameTokens) if (!exSet.has(t) && !STOP.has(t)) s -= 1;
     if (s > bestScore) {
       bestScore = s;

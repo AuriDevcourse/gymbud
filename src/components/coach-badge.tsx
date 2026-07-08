@@ -6,33 +6,41 @@ const MAP: Record<
   { label: string; icon: typeof TrendingUp; cls: string }
 > = {
   increase: {
-    label: "Add weight",
+    label: "Go heavier",
     icon: TrendingUp,
     cls: "text-push border-push/40 bg-push/10",
   },
   maintain: {
-    label: "Same weight",
+    label: "Stay here",
     icon: Minus,
     cls: "text-good border-good/40 bg-good/10",
   },
   back_off: {
-    label: "Drop weight",
+    label: "Ease off",
     icon: TrendingDown,
     cls: "text-back-off border-back-off/40 bg-back-off/10",
   },
   start: {
-    label: "New lift",
+    label: "First time",
     icon: Sparkles,
     cls: "text-muted border-border bg-surface-2",
   },
 };
 
-export function CoachBadge({ action }: { action: CoachAction }) {
+export function CoachBadge({
+  action,
+  prefix,
+}: {
+  action: CoachAction;
+  /** optional lead-in ("Next time") so the badge's timeframe is never ambiguous */
+  prefix?: string;
+}) {
   const { label, icon: Icon, cls } = MAP[action];
   return (
     <span
       className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-semibold ${cls}`}
     >
+      {prefix && <span className="font-medium opacity-70">{prefix}</span>}
       <Icon size={14} aria-hidden="true" />
       {label}
     </span>

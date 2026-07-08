@@ -131,7 +131,7 @@ export function ExerciseCard({
               {EQUIPMENT_LABELS[ex.equipment]}
             </span>
           </div>
-          <p className="mt-1 text-[0.7rem] text-muted">{doseCaption(goal, ex.type)}</p>
+          <p className="mt-1 text-[0.7rem] text-muted">{doseCaption(goal, ex)}</p>
         </div>
         <div className="flex shrink-0 gap-1">
           <button
@@ -172,7 +172,7 @@ export function ExerciseCard({
         onAdd={onAddSet}
         onValues={onValues}
       />
-      <div className="px-4 pb-5 pt-1">
+      <div className="px-4 pb-3 pt-1">
         {/* key by set number so each "Next set" fades in as a fresh window */}
         <div key={se.sets.length} className="animate-fade">
           <p className="text-xs font-semibold uppercase tracking-widest text-accent">

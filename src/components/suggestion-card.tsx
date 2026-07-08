@@ -20,12 +20,14 @@ export function SuggestionCard({
   daysPerWeek,
   available,
   daysSince,
+  rotation,
   hasActive,
 }: {
   goal: Goal;
   daysPerWeek: number;
   available: Equipment[];
   daysSince: Partial<Record<MuscleGroup, number>>;
+  rotation: number;
   hasActive: boolean;
 }) {
   // seed 0 = the canonical suggestion; shuffling rolls a fresh variation
@@ -34,8 +36,8 @@ export function SuggestionCard({
   const [length, setLength] = useState<WorkoutLength>("medium");
 
   const suggestion = useMemo(
-    () => suggestWorkout({ goal, daysPerWeek, available, daysSince, seed, focus, length }),
-    [goal, daysPerWeek, available, daysSince, seed, focus, length],
+    () => suggestWorkout({ goal, daysPerWeek, available, daysSince, seed, rotation, focus, length }),
+    [goal, daysPerWeek, available, daysSince, seed, rotation, focus, length],
   );
 
   const FOCUSES = Object.keys(FOCUS_LABELS) as WorkoutFocus[];

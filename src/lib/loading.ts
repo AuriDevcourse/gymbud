@@ -3,7 +3,7 @@
 // from the exercise's equipment + type so the workout screen stops treating a
 // barbell squat, a pair of dumbbells and a plank identically.
 
-import type { Exercise, WeightMode } from "./exercise-library";
+import type { Exercise, MuscleGroup, WeightMode } from "./exercise-library";
 import { REP_RANGE, type Goal, type Unit } from "./types";
 
 // What the entered weight represents. Defaults follow the equipment; an
@@ -41,16 +41,15 @@ export function weightLabel(ex: Exercise, unit: Unit): { label: string; hint?: s
 }
 
 // Smallest sensible jump for the +/- buttons, by equipment.
-//  dumbbell 2 · barbell/smith 5 · everything else 2.5 (kg). Doubled-ish for lb.
+//  kg: dumbbell 2 · everything else 2.5 (a pair of 1.25 kg plates on a bar).
+//  lb: dumbbell 5 · everything else 5. Kept small so a barbell doesn't leap in
+//  ~4.5 kg (10 lb) chunks — the fine ±1.25 button under the field handles the
+//  in-between loads.
 export function weightStep(ex: Exercise, unit: Unit): number {
   if (unit === "lb") {
-    if (ex.equipment === "dumbbell") return 5;
-    if (ex.equipment === "barbell" || ex.equipment === "smith") return 10;
-    return 5;
+    return ex.equipment === "dumbbell" ? 5 : 5;
   }
-  if (ex.equipment === "dumbbell") return 2;
-  if (ex.equipment === "barbell" || ex.equipment === "smith") return 5;
-  return 2.5;
+  return ex.equipment === "dumbbell" ? 2 : 2.5;
 }
 
 // Rep target, nudged by movement type: compounds sit at the lower (heavier) end
@@ -64,17 +63,36 @@ export function repRangeFor(goal: Goal, type: Exercise["type"]): { low: number; 
   return { low: base.low + 2, high: base.high + 3 };
 }
 
-// How many working sets to plan: compounds get one more than isolation.
-export function targetSetsFor(goal: Goal, type: Exercise["type"]): number {
-  if (goal === "strength") return type === "compound" ? 5 : 4;
-  if (goal === "muscle_gain") return type === "compound" ? 4 : 3;
-  return 3; // fat_loss, general
+// Big prime movers that carry more volume than the small assistance muscles.
+const LARGE_MUSCLES = new Set<MuscleGroup>([
+  "chest",
+  "back",
+  "quads",
+  "hamstrings",
+  "glutes",
+  "shoulders",
+]);
+
+// How many working sets to plan — varied by ROLE, not a flat 4 for everything.
+// A heavy compound on a big muscle earns the most sets; an isolation move on a
+// small muscle the fewest. Keeps a session from being six identical 4-set slogs.
+//   role 2 = compound on a large muscle (e.g. squat, bench)
+//   role 1 = compound on a small muscle OR isolation on a large one
+//   role 0 = isolation on a small muscle (e.g. calf raise, curl)
+export function targetSetsFor(
+  goal: Goal,
+  ex: Pick<Exercise, "type" | "muscleGroup">,
+): number {
+  const role = (ex.type === "compound" ? 1 : 0) + (LARGE_MUSCLES.has(ex.muscleGroup) ? 1 : 0);
+  if (goal === "strength") return [3, 4, 5][role];
+  if (goal === "muscle_gain") return [2, 3, 4][role];
+  return [2, 2, 3][role]; // fat_loss, general
 }
 
 // One-line "why this dose" caption for the card.
-export function doseCaption(goal: Goal, type: Exercise["type"]): string {
-  const r = repRangeFor(goal, type);
-  const sets = targetSetsFor(goal, type);
-  const kind = type === "compound" ? "Compound" : "Isolation";
+export function doseCaption(goal: Goal, ex: Pick<Exercise, "type" | "muscleGroup">): string {
+  const r = repRangeFor(goal, ex.type);
+  const sets = targetSetsFor(goal, ex);
+  const kind = ex.type === "compound" ? "Compound" : "Isolation";
   return `${kind} · ${sets} sets × ${r.low} to ${r.high} reps`;
 }

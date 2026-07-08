@@ -22,6 +22,11 @@ const MUSCLE_INFO: Record<
     does: "Pulls things toward you and pulls your body up toward a bar.",
     why: "Carrying bags, lifting things off the ground, and holding you upright.",
   },
+  traps: {
+    where: "The diamond of muscle across the top of your back and the base of your neck.",
+    does: "Lifts and steadies your shoulder blades — think shrugging upward.",
+    why: "Carrying heavy bags, good posture, and a strong, stable neck.",
+  },
   shoulders: {
     where: "The rounded caps that sit on top of each upper arm.",
     does: "Lifts your arms out to the side, forward, and overhead.",

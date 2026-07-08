@@ -29,7 +29,7 @@ import { CoachBadge } from "./coach-badge";
 import { ExerciseCard, type LastData } from "./exercise-card";
 import { WorkoutSkeleton } from "./skeleton";
 import { api, fmtWeight } from "@/lib/format";
-import { tapHaptic, successHaptic } from "@/lib/haptics";
+import { tapHaptic, successHaptic, primeAudio, restDoneCue } from "@/lib/haptics";
 import { CountUp } from "./count-up";
 import { peek, poke, useApi } from "@/lib/swr";
 import { parseDbDate } from "@/lib/date";
@@ -215,7 +215,8 @@ export function WorkoutClient() {
     if (pending) {
       // navigated here optimistically — create the session now
       sessionStorage.removeItem(PENDING_WORKOUT_KEY);
-      const ids = pending.exerciseIds ?? [];
+      // de-dupe so a program day (or shuffle) can never seed the same lift twice
+      const ids = [...new Set(pending.exerciseIds ?? [])];
       (async () => {
         try {
           const s = await api<Session>("/api/sessions", { method: "POST" });
@@ -331,6 +332,13 @@ export function WorkoutClient() {
   const addExercise = async (ex: Exercise) => {
     if (!session) return;
     setPickerOpen(false);
+    // Don't stack the same lift twice — jump to the one already in the workout.
+    const existingIdx = session.exercises.findIndex((e) => e.exerciseId === ex.id);
+    if (existingIdx >= 0) {
+      setCurrent(existingIdx);
+      setToast({ msg: `${ex.name} is already in this workout` });
+      return;
+    }
     try {
       const se = await api<SessionExercise>(`/api/sessions/${session.id}/exercises`, {
         method: "POST",
@@ -413,6 +421,7 @@ export function WorkoutClient() {
     }));
     celebrate(false);
     tapHaptic(); // physical tick the instant a set is logged
+    primeAudio(); // unlock audio inside this tap so the rest-end beep works on iOS
     const ends = Date.now() + restSeconds(goal) * 1000;
     setRestEndsAt(ends);
     if (session) store.set(restKeyFor(session.id), String(ends));
@@ -646,16 +655,15 @@ export function WorkoutClient() {
   const idx = Math.min(current, Math.max(0, exercises.length - 1));
   const se = exercises[idx];
   const onLast = idx >= exercises.length - 1;
-  const target = se
-    ? targetSetsFor(goal, EXERCISES_BY_ID[se.exerciseId]?.type ?? "compound")
-    : 0;
+  const targetEx = se ? EXERCISES_BY_ID[se.exerciseId] : undefined;
+  const target = targetEx ? targetSetsFor(goal, targetEx) : 0;
   // warm-up sets don't count toward the working-set target
   const setsDone = se ? se.sets.filter((s) => s.type !== "warmup").length : 0;
   const setsComplete = setsDone >= target;
 
   return (
     <div className="pb-4">
-      <div className="mb-4 flex items-start justify-between gap-2">
+      <div className="mb-3 flex items-start justify-between gap-2">
         <div>
           <h1 className="display text-2xl font-bold leading-tight">Workout</h1>
           {exercises.length > 0 && (
@@ -715,7 +723,7 @@ export function WorkoutClient() {
                 onClose={closeRest}
               />
             )}
-            <p className="mb-2 text-xs font-semibold uppercase tracking-widest text-muted">
+            <p className="mb-1.5 text-xs font-semibold uppercase tracking-widest text-muted">
               Exercise {idx + 1} of {exercises.length}
             </p>
             <div key={se.id} className="animate-exercise-in">
@@ -736,8 +744,31 @@ export function WorkoutClient() {
               />
             </div>
 
-            {/* Bottom bar: back · next set (until all sets logged) · next exercise */}
-            <div className="mt-4 flex gap-2">
+            {/* Rate the lift the moment you finish it — not buried on the end
+                screen when you've forgotten how it felt. Feeds next session's coach. */}
+            {setsComplete && (
+              <InlineRating value={se.difficulty} onRate={(d) => rateDifficulty(se.id, d)} />
+            )}
+
+            {/* What's coming, so you can plan the next station before you leave this one. */}
+            {!onLast && (
+              <p className="mt-3 flex items-center gap-1.5 text-xs text-muted">
+                <span className="font-semibold uppercase tracking-wider">Up next</span>
+                <ChevronRight size={12} aria-hidden="true" />
+                <span className="truncate text-muted-strong">
+                  {EXERCISES_BY_ID[exercises[idx + 1]?.exerciseId]?.name ?? "—"}
+                </span>
+              </p>
+            )}
+
+            {/* Bottom bar: back · next set (until all sets logged) · next exercise.
+                Sticky just above the nav so the primary action is always in reach —
+                a tall card (rest bar + logged sets) can't push it off-screen. The
+                full-width faded background masks content scrolling underneath. */}
+            <div
+              className="sticky z-30 -mx-4 mt-3 flex gap-2 bg-gradient-to-t from-background via-background to-transparent px-4 pb-2 pt-3"
+              style={{ bottom: "calc(4.75rem + env(safe-area-inset-bottom))" }}
+            >
               <Button
                 variant="surface"
                 size="lg"
@@ -885,6 +916,42 @@ function NoteEditor({ initial, onSave }: { initial: string; onSave: (n: string) 
   );
 }
 
+// Quick RPE shown right after an exercise's last set. Rating here (while the
+// set is fresh) beats rating everything at the very end — and pre-fills the
+// finish screen, so it's never asked twice.
+function InlineRating({
+  value,
+  onRate,
+}: {
+  value: Difficulty | null;
+  onRate: (d: Difficulty) => void;
+}) {
+  const DIFFS = Object.keys(DIFFICULTY_LABELS) as Difficulty[];
+  return (
+    <div className="mt-3 animate-fade rounded-[var(--radius-md)] border border-border bg-surface p-3">
+      <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted">
+        How did that feel?
+      </p>
+      <div className="flex gap-1.5">
+        {DIFFS.map((d) => (
+          <button
+            key={d}
+            onClick={() => onRate(d)}
+            aria-pressed={value === d}
+            className={`flex-1 rounded-full border px-2 py-2 text-xs font-medium transition ${
+              value === d
+                ? "border-accent bg-accent/10 text-accent"
+                : "border-border bg-surface-2 text-muted"
+            }`}
+          >
+            {DIFFICULTY_LABELS[d]}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function FinishSummary({
   exercises,
   summary,
@@ -965,8 +1032,9 @@ function FinishSummary({
               unit={unit}
             />
           </div>
-          <p className="mb-3 text-sm text-muted">
-            How hard was each one? It tunes next session&apos;s weights.
+          <p className="mb-1 text-sm font-semibold">Your plan for next session</p>
+          <p className="mb-3 text-xs text-muted">
+            Based on today. Adjust how each lift felt if the call looks off.
           </p>
           <ul className="flex flex-col gap-2">
             {logged.map((e) => {
@@ -980,8 +1048,13 @@ function FinishSummary({
                     <span className="font-medium">
                       {EXERCISES_BY_ID[e.exerciseId]?.name ?? e.exerciseId}
                     </span>
-                    {rec && rec.action !== "start" && <CoachBadge action={rec.action} />}
+                    {rec && rec.action !== "start" && (
+                      <CoachBadge action={rec.action} prefix="Next time" />
+                    )}
                   </div>
+                  {rec && rec.action !== "start" && (
+                    <p className="mb-2 text-xs text-muted">{rec.reason}</p>
+                  )}
                   <div className="flex gap-1.5">
                     {DIFFS.map((d) => (
                       <button
@@ -1149,7 +1222,7 @@ function RestBar({
   useEffect(() => {
     if (done && !vibratedRef.current) {
       vibratedRef.current = true;
-      if (typeof navigator !== "undefined" && navigator.vibrate) navigator.vibrate(180);
+      restDoneCue(); // beep + buzz — the beep is what actually lands on iPhone
     }
     if (!done) vibratedRef.current = false;
   }, [done]);
@@ -1163,36 +1236,57 @@ function RestBar({
 
   return (
     <div className="mb-3 w-full">
-      <div className="animate-slide-up overflow-hidden rounded-[var(--radius-md)] border border-border bg-surface shadow-lg shadow-black/40">
-        <div className="h-1 w-full bg-surface-2">
+      <div
+        className={`animate-slide-up overflow-hidden rounded-[var(--radius-md)] border bg-surface shadow-lg shadow-black/40 ${
+          done ? "animate-rest-done border-good/60" : "border-border"
+        }`}
+      >
+        <div className="h-1.5 w-full bg-surface-2">
           <div
             className={`h-full ${done ? "bg-good" : "bg-accent"}`}
             style={{ width: `${done ? 100 : pct * 100}%`, transition: "width 1s linear" }}
           />
         </div>
-        <div className="flex items-center gap-2 px-3 py-2">
-          <Timer size={16} className={done ? "text-good" : "text-accent"} aria-hidden="true" />
-          <span className="text-sm text-muted">{done ? "Time's up" : "Rest"}</span>
-          <span className={`stat-num text-lg ${done ? "text-good" : "text-accent"}`}>
-            {done ? "Go!" : fmtClock(left)}
-          </span>
-          <div className="ml-auto flex items-center gap-1.5">
+        <div className="flex items-center gap-3 px-3 py-2.5">
+          {/* The time is the point — make it big and legible at a glance mid-set. */}
+          <div className="flex min-w-0 items-center gap-2.5">
+            <Timer
+              size={22}
+              className={done ? "text-good" : "text-accent"}
+              aria-hidden="true"
+            />
+            <div className="leading-none">
+              <span className="block text-[0.65rem] font-semibold uppercase tracking-widest text-muted">
+                {done ? "Rest over" : "Rest"}
+              </span>
+              <span
+                className={`stat-num block text-4xl font-bold tabular-nums leading-none ${
+                  done ? "text-good" : "text-accent"
+                }`}
+              >
+                {done ? "Go!" : fmtClock(left)}
+              </span>
+            </div>
+          </div>
+          <div className="ml-auto flex shrink-0 items-center gap-1.5">
             <button
               onClick={() => adjust(-15)}
-              className="rounded-md border border-border bg-surface-2 px-2 py-1 text-xs"
+              aria-label="Rest 15 seconds less"
+              className="rounded-md border border-border bg-surface-2 px-2.5 py-1.5 text-xs font-medium active:bg-surface-3"
             >
-              -15
+              −15
             </button>
             <button
               onClick={() => adjust(15)}
-              className="rounded-md border border-border bg-surface-2 px-2 py-1 text-xs"
+              aria-label="Rest 15 seconds more"
+              className="rounded-md border border-border bg-surface-2 px-2.5 py-1.5 text-xs font-medium active:bg-surface-3"
             >
               +15
             </button>
             <button
               onClick={onClose}
               aria-label="Skip rest"
-              className="rounded-md bg-accent px-2.5 py-1 text-xs font-semibold text-accent-foreground"
+              className="rounded-md bg-accent px-3 py-1.5 text-xs font-semibold text-accent-foreground active:opacity-90"
             >
               Skip
             </button>

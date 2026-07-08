@@ -1,6 +1,7 @@
 export type MuscleGroup =
   | "chest"
   | "back"
+  | "traps"
   | "shoulders"
   | "biceps"
   | "triceps"
@@ -372,7 +373,7 @@ export const EXERCISES: Exercise[] = [
   },
   {
     id: "machine-pulldown",
-    name: "Machine Pulldown",
+    name: "Lat Pulldown (Machine)",
     muscleGroup: "back",
     secondary: ["biceps"],
     equipment: "machine",
@@ -449,6 +450,53 @@ export const EXERCISES: Exercise[] = [
       "dumbbell-deadlift",
       "cable-pull-through",
     ],
+  },
+
+  // ─── TRAPS (5) ────────────────────────────────────────────────────────────
+  {
+    id: "barbell-shrug",
+    name: "Barbell Shrug",
+    muscleGroup: "traps",
+    secondary: ["shoulders", "forearms"],
+    equipment: "barbell",
+    type: "isolation",
+    alternatives: ["dumbbell-shrug", "cable-shrug", "smith-shrug", "trap-bar-shrug"],
+  },
+  {
+    id: "dumbbell-shrug",
+    name: "Dumbbell Shrug",
+    muscleGroup: "traps",
+    secondary: ["shoulders", "forearms"],
+    equipment: "dumbbell",
+    type: "isolation",
+    alternatives: ["barbell-shrug", "cable-shrug", "smith-shrug", "trap-bar-shrug"],
+  },
+  {
+    id: "cable-shrug",
+    name: "Cable Shrug",
+    muscleGroup: "traps",
+    secondary: ["shoulders"],
+    equipment: "cable",
+    type: "isolation",
+    alternatives: ["dumbbell-shrug", "barbell-shrug", "smith-shrug"],
+  },
+  {
+    id: "smith-shrug",
+    name: "Smith Machine Shrug",
+    muscleGroup: "traps",
+    secondary: ["shoulders", "forearms"],
+    equipment: "smith",
+    type: "isolation",
+    alternatives: ["barbell-shrug", "dumbbell-shrug", "cable-shrug"],
+  },
+  {
+    id: "trap-bar-shrug",
+    name: "Trap Bar Shrug",
+    muscleGroup: "traps",
+    secondary: ["shoulders", "forearms"],
+    equipment: "barbell",
+    type: "isolation",
+    alternatives: ["barbell-shrug", "dumbbell-shrug", "smith-shrug"],
   },
 
   // ─── SHOULDERS (12) ───────────────────────────────────────────────────────
