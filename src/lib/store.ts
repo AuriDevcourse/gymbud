@@ -2,6 +2,13 @@ import type { InValue, Row } from "@libsql/client";
 import { getDb } from "./db";
 import { parseDbDate } from "./date";
 import { EXERCISES_BY_ID, type MuscleGroup } from "./exercise-library";
+import {
+  computeBadges,
+  levelFromXp,
+  xpForSession,
+  type Badge,
+  type LevelInfo,
+} from "./levels";
 import type {
   BodyWeightEntry,
   Profile,
@@ -509,6 +516,44 @@ export async function exerciseHistory(exerciseId: string): Promise<ExercisePoint
   return points;
 }
 
+// Best lift per exercise, ranked — a real "how strong am I" view across the
+// whole library instead of one hand-picked exercise. est-1RM via Epley.
+export interface TopLift {
+  exerciseId: string;
+  name: string;
+  weight: number;
+  reps: number;
+  est1rm: number;
+}
+
+export async function topLifts(limit = 6): Promise<TopLift[]> {
+  const rows = await all(
+    `SELECT se.exercise_id AS id, sl.weight AS weight, sl.reps AS reps,
+            (sl.weight * (1 + sl.reps / 30.0)) AS e1rm
+     FROM session_exercise se
+     JOIN set_log sl ON sl.session_exercise_id = se.id
+     WHERE sl.type != 'warmup' AND sl.weight > 0`,
+  );
+  // best set (by est-1RM) per exercise
+  const best = new Map<string, { weight: number; reps: number; e1rm: number }>();
+  for (const r of rows) {
+    const id = str(r.id);
+    const e1rm = num(r.e1rm);
+    const prev = best.get(id);
+    if (!prev || e1rm > prev.e1rm) best.set(id, { weight: num(r.weight), reps: num(r.reps), e1rm });
+  }
+  return [...best.entries()]
+    .map(([id, b]) => ({
+      exerciseId: id,
+      name: EXERCISES_BY_ID[id]?.name ?? id,
+      weight: b.weight,
+      reps: b.reps,
+      est1rm: Math.round(b.e1rm),
+    }))
+    .sort((a, b) => b.est1rm - a.est1rm)
+    .slice(0, limit);
+}
+
 export async function loggedExerciseIds(): Promise<string[]> {
   const rows = await all(
     `SELECT DISTINCT se.exercise_id AS id
@@ -539,4 +584,70 @@ export async function daysSinceByMuscle(): Promise<Partial<Record<MuscleGroup, n
     }
   }
   return out;
+}
+
+// ── Progress summary: XP, level, badges (all derived from history) ────────────
+export interface ProgressSummary {
+  totalXp: number;
+  level: LevelInfo;
+  streak: number;
+  totalWorkouts: number;
+  thisWeekSets: number;
+  totalSets: number;
+  totalReps: number;
+  totalVolume: number;
+  distinctExercises: number;
+  distinctMuscles: number;
+  badges: Badge[];
+}
+
+export async function progressSummary(): Promise<ProgressSummary> {
+  const stats = await workoutStats();
+
+  // lifetime work — working sets only (warm-ups don't earn XP)
+  const agg = await one(
+    `SELECT COUNT(sl.id) AS sets,
+            COALESCE(SUM(sl.reps), 0) AS reps,
+            COALESCE(SUM(sl.weight * sl.reps), 0) AS volume
+     FROM set_log sl
+     WHERE sl.type != 'warmup'`,
+  );
+  const totalSets = num(agg?.sets ?? 0);
+  const totalReps = num(agg?.reps ?? 0);
+  const totalVolume = num(agg?.volume ?? 0);
+
+  const exIds = await loggedExerciseIds();
+  const muscles = new Set<MuscleGroup>();
+  for (const id of exIds) {
+    const ex = EXERCISES_BY_ID[id];
+    if (ex) muscles.add(ex.muscleGroup);
+  }
+
+  const totalXp = xpForSession({ workingSets: totalSets, reps: totalReps, finished: false }) +
+    stats.totalWorkouts * 50;
+  const level = levelFromXp(totalXp);
+
+  const badges = computeBadges({
+    totalWorkouts: stats.totalWorkouts,
+    streak: stats.streak,
+    totalSets,
+    totalVolume,
+    distinctExercises: exIds.length,
+    distinctMuscles: muscles.size,
+    level: level.level,
+  });
+
+  return {
+    totalXp,
+    level,
+    streak: stats.streak,
+    totalWorkouts: stats.totalWorkouts,
+    thisWeekSets: stats.thisWeekSets,
+    totalSets,
+    totalReps,
+    totalVolume,
+    distinctExercises: exIds.length,
+    distinctMuscles: muscles.size,
+    badges,
+  };
 }

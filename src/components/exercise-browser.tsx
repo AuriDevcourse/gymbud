@@ -7,10 +7,10 @@ import { DemoImage } from "./demo";
 import { Chip } from "./ui";
 import {
   EXERCISES,
-  EXERCISES_BY_ID,
   type Exercise,
   type MuscleGroup,
 } from "@/lib/exercise-library";
+import { alternativesFor } from "@/lib/coach";
 import { EQUIPMENT_LABELS, MUSCLE_LABELS } from "@/lib/types";
 
 const MUSCLES = Object.keys(MUSCLE_LABELS) as MuscleGroup[];
@@ -94,9 +94,9 @@ export function ExerciseBrowser() {
 }
 
 function Detail({ ex, onOpen }: { ex: Exercise; onOpen: (e: Exercise) => void }) {
-  const alts = ex.alternatives
-    .map((id) => EXERCISES_BY_ID[id])
-    .filter(Boolean) as Exercise[];
+  // Always surface a healthy set of swaps (≥5 where the library allows), not just
+  // the short hand-curated list — no dead ends when a machine is taken.
+  const alts = alternativesFor(ex.id).slice(0, 8);
   return (
     <div>
       <div className="mb-4">
