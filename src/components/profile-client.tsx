@@ -1,105 +1,84 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
-import { Check, Flame, Loader2, Lock, Scale } from "lucide-react";
-import { Button, Card, SectionTitle } from "./ui";
-import { WeightDelta } from "./weight-delta";
-import { api, fmtWeight } from "@/lib/format";
+import Link from "next/link";
+import {
+  Compass,
+  Dumbbell,
+  Flame,
+  Layers,
+  type LucideIcon,
+  Settings,
+  Shield,
+  Sparkles,
+  Star,
+  Target,
+  TrendingUp,
+  Trophy,
+} from "lucide-react";
+import { Card, SectionTitle } from "./ui";
+import { api } from "@/lib/format";
 import { peek, poke } from "@/lib/swr";
 import { PageSkeleton } from "./skeleton";
-import { weightTrend } from "@/lib/bodyweight";
-import { relativeDay, todayISO } from "@/lib/date";
-import type { Equipment } from "@/lib/exercise-library";
-import {
-  EQUIPMENT_LABELS,
-  GOAL_LABELS,
-  type BodyWeightEntry,
-  type Goal,
-  type Profile,
-  type Unit,
-  type WorkoutStats,
-} from "@/lib/types";
+import { relativeDay } from "@/lib/date";
+import type { Profile } from "@/lib/types";
+import type { ProgressSummary, SessionSummary } from "@/lib/store";
 
-const GOALS = Object.keys(GOAL_LABELS) as Goal[];
-const EQUIPMENT = Object.keys(EQUIPMENT_LABELS) as Equipment[];
+// Badge icon name (from levels.ts) → lucide component.
+const ICONS: Record<string, LucideIcon> = {
+  Sparkles,
+  Dumbbell,
+  Flame,
+  Shield,
+  Layers,
+  TrendingUp,
+  Compass,
+  Target,
+  Star,
+};
 
+// Profile is now your IDENTITY: cosmic level, streak, achievements and recent
+// activity — the stuff that makes you feel like someone who trains. The behaviour
+// knobs (goal/units/equipment) live in Settings; body weight lives in Progress.
 export function ProfileClient() {
-  const router = useRouter();
   const [p, setP] = useState<Profile | null>(() => peek<Profile>("/api/profile") ?? null);
-  const [weights, setWeights] = useState<BodyWeightEntry[]>([]);
-  const [stats, setStats] = useState<WorkoutStats | null>(null);
+  const [stats, setStats] = useState<ProgressSummary | null>(null);
+  const [sessions, setSessions] = useState<SessionSummary[]>([]);
   const [name, setName] = useState("");
-  const [bw, setBw] = useState("");
-  const [authOn, setAuthOn] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     Promise.all([
       api<Profile>("/api/profile"),
-      api<BodyWeightEntry[]>("/api/bodyweight"),
-      api<{ auth: boolean }>("/api/health").catch(() => ({ auth: false })),
-      api<WorkoutStats>("/api/stats").catch(() => null),
+      api<ProgressSummary>("/api/stats").catch(() => null),
+      api<SessionSummary[]>("/api/sessions").catch(() => []),
     ])
-      .then(([prof, w, health, st]) => {
+      .then(([prof, st, ses]) => {
         setP(prof);
         poke("/api/profile", prof);
         setName(prof.name);
-        setWeights(w);
-        setAuthOn(Boolean(health.auth));
         setStats(st);
-        if (w.length) setBw(String(w[w.length - 1].weight));
+        setSessions(ses.filter((s) => s.finishedAt).slice(0, 6));
       })
       .catch((e) => setError(e.message));
   }, []);
 
-  const lock = async () => {
-    try {
-      await api("/api/logout", { method: "POST" });
-      router.push("/login");
-      router.refresh();
-    } catch (e) {
-      setError((e as Error).message);
-    }
-  };
-
-  const save = async (next: Profile) => {
-    setP(next);
-    setSaving(true);
-    setSaved(false);
+  const saveName = async (next: string) => {
+    if (!p || next.trim() === p.name) return;
+    const updated = { ...p, name: next.trim() };
+    setP(updated);
     try {
       const saved = await api<Profile>("/api/profile", {
         method: "PUT",
         body: JSON.stringify({
-          name: next.name,
-          goal: next.goal,
-          daysPerWeek: next.daysPerWeek,
-          equipment: next.equipment,
-          unit: next.unit,
+          name: updated.name,
+          goal: p.goal,
+          daysPerWeek: p.daysPerWeek,
+          equipment: p.equipment,
+          unit: p.unit,
         }),
       });
-      setP(saved);
       poke("/api/profile", saved);
-      setSaved(true);
-      setTimeout(() => setSaved(false), 1500);
-    } catch (e) {
-      setError((e as Error).message);
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const logWeight = async () => {
-    const val = parseFloat(bw);
-    if (!val || val <= 0) return;
-    try {
-      const entry = await api<BodyWeightEntry>("/api/bodyweight", {
-        method: "POST",
-        body: JSON.stringify({ weight: val, loggedAt: todayISO() }),
-      });
-      setWeights((w) => [...w.filter((x) => x.loggedAt !== entry.loggedAt), entry]);
     } catch (e) {
       setError((e as Error).message);
     }
@@ -107,233 +86,165 @@ export function ProfileClient() {
 
   if (!p) return <PageSkeleton />;
 
-  const toggleEquip = (e: Equipment) => {
-    const has = p.equipment.includes(e);
-    save({
-      ...p,
-      equipment: has ? p.equipment.filter((x) => x !== e) : [...p.equipment, e],
-    });
-  };
-
-  const recent = [...weights].reverse().slice(0, 6);
-  const trend = weightTrend(weights);
+  const level = stats?.level;
+  const badges = stats?.badges ?? [];
+  const earned = badges.filter((b) => b.earned);
+  const locked = badges.filter((b) => !b.earned);
 
   return (
     <div className="flex flex-col gap-5 pb-4">
       <div className="flex items-center justify-between">
         <h1 className="display text-2xl font-bold">Profile</h1>
-        {saving ? (
-          <Loader2 size={18} className="animate-spin text-muted" aria-label="Saving" />
-        ) : saved ? (
-          <span className="flex items-center gap-1 text-xs text-good">
-            <Check size={14} aria-hidden="true" /> Saved
-          </span>
-        ) : null}
+        <Link
+          href="/settings"
+          aria-label="Settings"
+          className="flex h-9 w-9 items-center justify-center rounded-[var(--radius-sm)] border border-border bg-surface-2 text-muted active:bg-surface-3"
+        >
+          <Settings size={18} aria-hidden="true" />
+        </Link>
       </div>
 
       {error && <p className="text-sm text-danger">{error}</p>}
 
-      {/* Streak — your identity as someone who trains */}
-      {stats && (
-        <Card className="flex items-center gap-3 border-accent/30 bg-accent/10">
-          <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-accent/20 text-accent">
-            <Flame size={24} aria-hidden="true" />
-          </span>
-          <div>
-            <p className="stat-num text-3xl font-bold leading-none text-accent">
-              {stats.streak}
-              <span className="ml-1.5 text-base font-medium text-muted-strong">
-                week{stats.streak === 1 ? "" : "s"} streak
-              </span>
-            </p>
-            <p className="mt-1 text-sm text-muted">
-              {stats.totalWorkouts} workouts · {stats.thisWeekSets} sets this week
-            </p>
+      {/* Level hero — the cosmic rank you've climbed to. */}
+      {level && (
+        <div className="overflow-hidden rounded-[var(--radius-lg)] border border-accent/30 bg-gradient-to-br from-accent/15 via-surface to-surface p-4">
+          <div className="flex items-center gap-3">
+            <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-accent/15 text-accent">
+              <Star size={26} aria-hidden="true" />
+            </span>
+            <div className="min-w-0">
+              <p className="text-xs font-semibold uppercase tracking-widest text-muted">
+                Level {level.level}
+              </p>
+              <p className="display truncate text-2xl font-bold text-accent">{level.name}</p>
+            </div>
           </div>
-        </Card>
+          <div className="mt-3">
+            <div className="mb-1 flex items-center justify-between text-[0.7rem]">
+              <span className="stat-num text-muted">{stats?.totalXp.toLocaleString()} XP</span>
+              <span className="text-muted">
+                {level.need - Math.round(level.into)} to {level.nextName}
+              </span>
+            </div>
+            <div className="h-2.5 w-full overflow-hidden rounded-full bg-surface-3">
+              <div
+                className="h-full rounded-full bg-accent transition-[width] duration-700 ease-out"
+                style={{ width: `${Math.round(level.progress * 100)}%` }}
+              />
+            </div>
+          </div>
+        </div>
       )}
 
-      {/* Name */}
-      <section>
-        <SectionTitle>Your name</SectionTitle>
-        <input
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          onBlur={() => {
-            if (p && name.trim() !== p.name) save({ ...p, name: name.trim() });
-          }}
-          maxLength={40}
-          placeholder="Add your name"
-          aria-label="Your name"
-          className="h-12 w-full rounded-[var(--radius-md)] border border-border bg-background px-3 text-foreground outline-none focus:border-accent"
-        />
-      </section>
+      {/* Name — the one bit of identity you set by hand. */}
+      <input
+        value={name}
+        onChange={(e) => setName(e.target.value)}
+        onBlur={() => saveName(name)}
+        maxLength={40}
+        placeholder="Add your name"
+        aria-label="Your name"
+        className="h-12 w-full rounded-[var(--radius-md)] border border-border bg-background px-3 text-foreground outline-none focus:border-accent"
+      />
 
-      {/* Body weight */}
-      <section>
-        <SectionTitle>Body weight</SectionTitle>
-        <Card>
-          {trend.current && (
-            <div className="mb-4 flex items-end justify-between gap-2">
-              <div>
-                <p className="stat-num text-3xl font-bold leading-none">
-                  {fmtWeight(trend.current.weight)}
-                  <span className="ml-1 text-base font-medium text-muted">{p.unit}</span>
-                </p>
-                <p className="mt-1 text-xs text-muted">{relativeDay(trend.current.loggedAt)}</p>
-              </div>
-              <div className="flex flex-col items-end gap-1">
-                <WeightDelta delta={trend.delta} unit={p.unit} goal={p.goal} label="vs last" />
-                {trend.totalDelta !== null && (
-                  <WeightDelta
-                    delta={trend.totalDelta}
-                    unit={p.unit}
-                    goal={p.goal}
-                    label="all time"
-                  />
-                )}
-              </div>
-            </div>
-          )}
-          <div className="flex items-end gap-2">
-            <label className="flex-1">
-              <span className="mb-1 block text-xs text-muted">Today ({p.unit})</span>
-              <div className="relative">
-                <Scale
-                  size={16}
-                  className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted"
-                  aria-hidden="true"
-                />
-                <input
-                  type="number"
-                  inputMode="decimal"
-                  value={bw}
-                  onChange={(e) => setBw(e.target.value)}
-                  aria-label="Body weight today"
-                  className="stat-num h-12 w-full rounded-[var(--radius-md)] border border-border bg-background pl-9 pr-3 text-xl font-bold outline-none focus:border-accent"
-                />
-              </div>
-            </label>
-            <Button variant="accent" size="lg" onClick={logWeight}>
-              Log
-            </Button>
-          </div>
-          {recent.length > 0 && (
-            <ul className="mt-3 flex flex-col">
-              {recent.map((w) => (
-                <li
-                  key={w.id}
-                  className="flex items-center justify-between border-b border-border/60 py-2 text-sm last:border-0"
-                >
-                  <span className="text-muted">{relativeDay(w.loggedAt)}</span>
-                  <span className="stat-num font-semibold">
-                    {fmtWeight(w.weight, p.unit)}
-                  </span>
-                </li>
-              ))}
-            </ul>
-          )}
-        </Card>
-      </section>
-
-      {/* Goal */}
-      <section>
-        <SectionTitle>Goal</SectionTitle>
-        <div className="grid grid-cols-2 gap-2">
-          {GOALS.map((g) => (
-            <button
-              key={g}
-              onClick={() => save({ ...p, goal: g })}
-              aria-pressed={p.goal === g}
-              className={`rounded-[var(--radius-md)] border px-3 py-3 text-sm font-medium transition ${
-                p.goal === g
-                  ? "border-accent bg-accent/10 text-accent"
-                  : "border-border bg-surface text-muted-strong"
-              }`}
-            >
-              {GOAL_LABELS[g]}
-            </button>
-          ))}
+      {/* Quick stats */}
+      {stats && (
+        <div className="grid grid-cols-3 gap-2">
+          <StatTile icon={<Flame size={17} aria-hidden="true" />} value={stats.streak} label={`wk streak`} accent />
+          <StatTile icon={<Dumbbell size={17} aria-hidden="true" />} value={stats.totalWorkouts} label="workouts" />
+          <StatTile icon={<Layers size={17} aria-hidden="true" />} value={stats.totalSets} label="total sets" />
         </div>
+      )}
+
+      {/* Recent activity — what you've been doing, first. */}
+      <section>
+        <SectionTitle>Recent activity</SectionTitle>
+        {sessions.length === 0 ? (
+          <Card className="text-center text-sm text-muted">
+            No finished workouts yet. Your sessions will show up here.
+          </Card>
+        ) : (
+          <ul className="flex flex-col gap-1.5">
+            {sessions.map((s) => (
+              <li
+                key={s.id}
+                className="flex items-center justify-between gap-2 rounded-[var(--radius-md)] border border-border bg-surface px-3 py-2.5"
+              >
+                <div className="min-w-0">
+                  <p className="font-medium">{relativeDay(s.startedAt)}</p>
+                  <p className="text-xs text-muted">
+                    {s.exerciseCount} {s.exerciseCount === 1 ? "exercise" : "exercises"} · {s.setCount} sets
+                  </p>
+                </div>
+                <span className="stat-num shrink-0 rounded-full bg-accent/10 px-2.5 py-1 text-xs font-semibold text-accent">
+                  +{s.setCount * 12} XP
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
       </section>
 
-      {/* Days per week */}
+      {/* Achievements */}
       <section>
-        <SectionTitle>Days per week</SectionTitle>
-        <div className="flex gap-1.5">
-          {[1, 2, 3, 4, 5, 6, 7].map((d) => (
-            <button
-              key={d}
-              onClick={() => save({ ...p, daysPerWeek: d })}
-              aria-pressed={p.daysPerWeek === d}
-              className={`stat-num flex-1 rounded-[var(--radius-sm)] border py-3 text-lg font-bold transition ${
-                p.daysPerWeek === d
-                  ? "border-accent bg-accent text-accent-foreground"
-                  : "border-border bg-surface text-muted-strong"
-              }`}
-            >
-              {d}
-            </button>
-          ))}
-        </div>
-      </section>
-
-      {/* Units */}
-      <section>
-        <SectionTitle>Units</SectionTitle>
-        <div className="flex gap-2">
-          {(["kg", "lb"] as Unit[]).map((u) => (
-            <button
-              key={u}
-              onClick={() => save({ ...p, unit: u })}
-              aria-pressed={p.unit === u}
-              className={`flex-1 rounded-[var(--radius-md)] border py-3 font-semibold uppercase transition ${
-                p.unit === u
-                  ? "border-accent bg-accent text-accent-foreground"
-                  : "border-border bg-surface text-muted-strong"
-              }`}
-            >
-              {u}
-            </button>
-          ))}
-        </div>
-      </section>
-
-      {/* Equipment */}
-      <section>
-        <SectionTitle>
-          Equipment you have
+        <SectionTitle right={<span className="text-xs text-muted">{earned.length}/{badges.length}</span>}>
+          Achievements
         </SectionTitle>
-        <p className="-mt-1 mb-2 text-xs text-muted">
-          Leave all off to assume everything is available.
-        </p>
-        <div className="flex flex-wrap gap-2">
-          {EQUIPMENT.map((e) => {
-            const on = p.equipment.includes(e);
+        <div className="grid grid-cols-3 gap-2">
+          {[...earned, ...locked].map((b) => {
+            const Icon = ICONS[b.icon] ?? Trophy;
             return (
-              <button
-                key={e}
-                onClick={() => toggleEquip(e)}
-                aria-pressed={on}
-                className={`rounded-full border px-3 py-2 text-sm font-medium transition ${
-                  on
-                    ? "border-accent bg-accent/10 text-accent"
-                    : "border-border bg-surface text-muted-strong"
+              <div
+                key={b.id}
+                className={`flex flex-col items-center gap-1.5 rounded-[var(--radius-md)] border p-3 text-center ${
+                  b.earned
+                    ? "border-accent/40 bg-accent/5"
+                    : "border-border bg-surface opacity-60"
                 }`}
               >
-                {EQUIPMENT_LABELS[e]}
-              </button>
+                <span
+                  className={`relative flex h-11 w-11 items-center justify-center rounded-full ${
+                    b.earned ? "bg-accent/15 text-accent" : "bg-surface-2 text-muted"
+                  }`}
+                >
+                  <Icon size={20} aria-hidden="true" />
+                  {!b.earned && b.progress > 0 && (
+                    <span className="absolute -bottom-1 h-1 w-8 overflow-hidden rounded-full bg-surface-3">
+                      <span
+                        className="block h-full rounded-full bg-muted-strong"
+                        style={{ width: `${Math.round(b.progress * 100)}%` }}
+                      />
+                    </span>
+                  )}
+                </span>
+                <p className="text-[0.7rem] font-semibold leading-tight">{b.name}</p>
+                <p className="text-[0.62rem] leading-tight text-muted">{b.desc}</p>
+              </div>
             );
           })}
         </div>
       </section>
+    </div>
+  );
+}
 
-      {authOn && (
-        <Button variant="outline" size="lg" className="mt-2 w-full" onClick={lock}>
-          <Lock size={16} aria-hidden="true" />
-          Lock app
-        </Button>
-      )}
+function StatTile({
+  icon,
+  value,
+  label,
+  accent,
+}: {
+  icon: React.ReactNode;
+  value: number;
+  label: string;
+  accent?: boolean;
+}) {
+  return (
+    <div className="flex flex-col items-center gap-1 rounded-[var(--radius-md)] border border-border bg-surface py-3 shadow-[var(--shadow-card)]">
+      <span className={accent ? "text-accent" : "text-muted"}>{icon}</span>
+      <span className="stat-num text-xl font-bold leading-none">{value.toLocaleString()}</span>
+      <span className="text-[0.58rem] uppercase tracking-wider text-muted">{label}</span>
     </div>
   );
 }

@@ -4,8 +4,10 @@ import { useEffect, useRef } from "react";
 
 // Numbers that roll up instead of snapping — the "premium" beat Robinhood and
 // Apple Fitness use on totals. requestAnimationFrame lerp writing straight to
-// the DOM node (no per-frame re-render). Animates once per mount (so a parent
-// re-render doesn't re-roll it) and honours reduced-motion.
+// the DOM node (no per-frame re-render). Re-rolls when the value changes, and
+// honours reduced-motion. The effect always writes the final value on cleanup so
+// a cancelled run (e.g. React StrictMode's mount→cleanup→remount in dev) can
+// never leave the number frozen at its initial 0.
 export function CountUp({
   value,
   duration = 650,
@@ -19,7 +21,6 @@ export function CountUp({
 }) {
   const ref = useRef<HTMLSpanElement>(null);
   const fmtRef = useRef(format);
-  const doneRef = useRef(false);
 
   // keep the latest formatter, updated in an effect (never during render)
   useEffect(() => {
@@ -27,8 +28,6 @@ export function CountUp({
   });
 
   useEffect(() => {
-    if (doneRef.current) return;
-    doneRef.current = true;
     const el = ref.current;
     if (!el) return;
     const fmt = fmtRef.current ?? ((n: number) => String(Math.round(n)));
@@ -50,7 +49,11 @@ export function CountUp({
       else el.textContent = fmt(value);
     };
     raf = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(raf);
+    return () => {
+      cancelAnimationFrame(raf);
+      // guarantee the final value is shown even if the run was cut short
+      el.textContent = fmt(value);
+    };
   }, [value, duration]);
 
   return (

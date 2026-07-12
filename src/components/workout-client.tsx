@@ -6,7 +6,6 @@ import {
   CheckCircle2,
   ChevronLeft,
   ChevronRight,
-  Dumbbell,
   Flag,
   Flame,
   Layers,
@@ -15,6 +14,7 @@ import {
   Plus,
   Share2,
   Snowflake,
+  Sparkles,
   StickyNote,
   Timer,
   Trophy,
@@ -35,6 +35,9 @@ import { peek, poke, useApi } from "@/lib/swr";
 import { parseDbDate } from "@/lib/date";
 import { getAlternatives } from "@/lib/coach";
 import { targetSetsFor } from "@/lib/loading";
+import { xpForSession, levelFromXp } from "@/lib/levels";
+import { warmupPlan, cooldownPlan } from "@/lib/warmup";
+import type { ProgressSummary } from "@/lib/store";
 import {
   EXERCISES_BY_ID,
   type Equipment,
@@ -195,6 +198,9 @@ export function WorkoutClient() {
     );
   }, []);
   const [swapOpen, setSwapOpen] = useState(false);
+  // Rate-before-you-leave: when you advance off a finished-but-unrated exercise,
+  // this holds the pending navigation until you tap a difficulty (or Skip).
+  const [ratePrompt, setRatePrompt] = useState<{ seId: number; proceed: () => void } | null>(null);
 
   // workout phases: warm up → working sets → cool down
   const [phase, setPhase] = useState<"warmup" | "main" | "cooldown">("main");
@@ -573,6 +579,13 @@ export function WorkoutClient() {
     }
   };
 
+  // Advancing off a finished exercise: if it isn't rated yet, ask right here
+  // (while it's fresh) before moving on, then run the pending navigation.
+  const rateThenGo = (se: SessionExercise, proceed: () => void) => {
+    if (!se.difficulty) setRatePrompt({ seId: se.id, proceed });
+    else proceed();
+  };
+
   const saveNote = async (note: string) => {
     if (!session) return;
     const clean = note.trim() || null;
@@ -614,12 +627,16 @@ export function WorkoutClient() {
     );
   }
 
+  // Warm-up / cool-down content, tailored to today's muscles + first lift.
+  const phaseExerciseIds = session.exercises.map((e) => e.exerciseId);
+
   // Warm-up screen: shown first on a fresh workout; "Start workout" → working sets.
   if (phase === "warmup") {
     return (
       <div className="pb-4">
         <PhaseScreen
           kind="warmup"
+          plan={warmupPlan(phaseExerciseIds, session.id)}
           onPrimary={() => setPhase("main")}
           onSkip={() => setPhase("main")}
         />
@@ -631,7 +648,13 @@ export function WorkoutClient() {
   if (phase === "cooldown") {
     return (
       <div className="pb-4">
-        <PhaseScreen kind="cooldown" busy={busy} onPrimary={finish} onSkip={finish} />
+        <PhaseScreen
+          kind="cooldown"
+          plan={cooldownPlan(phaseExerciseIds, session.id)}
+          busy={busy}
+          onPrimary={finish}
+          onSkip={finish}
+        />
         <Sheet open={finishOpen} onClose={closeSummary} title="Session done">
           <FinishSummary
           exercises={session.exercises}
@@ -763,10 +786,10 @@ export function WorkoutClient() {
 
             {/* Bottom bar: back · next set (until all sets logged) · next exercise.
                 Sticky just above the nav so the primary action is always in reach —
-                a tall card (rest bar + logged sets) can't push it off-screen. The
-                full-width faded background masks content scrolling underneath. */}
+                a tall card (rest bar + logged sets) can't push it off-screen. A soft
+                blur + light fade masks content underneath without a hard visible band. */}
             <div
-              className="sticky z-30 -mx-4 mt-3 flex gap-2 bg-gradient-to-t from-background via-background to-transparent px-4 pb-2 pt-3"
+              className="sticky z-30 -mx-4 mt-3 flex gap-2 bg-gradient-to-t from-background/90 via-background/40 to-transparent px-4 pb-2 pt-6 backdrop-blur-[2px]"
               style={{ bottom: "calc(4.75rem + env(safe-area-inset-bottom))" }}
             >
               <Button
@@ -798,7 +821,7 @@ export function WorkoutClient() {
                   variant="accent"
                   size="lg"
                   className="flex-1"
-                  onClick={() => setPhase("cooldown")}
+                  onClick={() => rateThenGo(se, () => setPhase("cooldown"))}
                   disabled={busy}
                 >
                   <Flag size={18} aria-hidden="true" />
@@ -809,7 +832,7 @@ export function WorkoutClient() {
                   variant="accent"
                   size="lg"
                   className="flex-1"
-                  onClick={() => setCurrent((c) => c + 1)}
+                  onClick={() => rateThenGo(se, () => setCurrent((c) => c + 1))}
                 >
                   Next exercise
                   <ChevronRight size={18} aria-hidden="true" />
@@ -873,6 +896,45 @@ export function WorkoutClient() {
             setNoteOpen(false);
           }}
         />
+      </Sheet>
+
+      {/* Rate-before-you-leave: fires when you advance off a finished-but-unrated
+          exercise, so the honest read is captured while the set is fresh. */}
+      <Sheet
+        open={!!ratePrompt}
+        onClose={() => setRatePrompt(null)}
+        title="How did that feel?"
+      >
+        <p className="mb-3 text-sm text-muted">
+          Rate this exercise so the coach can dial in next session&apos;s weight.
+        </p>
+        <div className="flex gap-2">
+          {(Object.keys(DIFFICULTY_LABELS) as Difficulty[]).map((d) => (
+            <button
+              key={d}
+              onClick={() => {
+                const p = ratePrompt;
+                if (!p) return;
+                rateDifficulty(p.seId, d);
+                setRatePrompt(null);
+                p.proceed();
+              }}
+              className="flex-1 rounded-[var(--radius-md)] border border-border bg-surface-2 py-3 text-sm font-semibold active:bg-surface-3"
+            >
+              {DIFFICULTY_LABELS[d]}
+            </button>
+          ))}
+        </div>
+        <button
+          onClick={() => {
+            const p = ratePrompt;
+            setRatePrompt(null);
+            p?.proceed();
+          }}
+          className="mt-3 w-full py-2 text-center text-xs text-muted active:text-foreground"
+        >
+          Skip for now
+        </button>
       </Sheet>
 
       <Sheet open={finishOpen} onClose={closeSummary} title="Session done">
@@ -988,28 +1050,81 @@ function FinishSummary({
   const working = logged.flatMap((e) => e.sets.filter((s) => s.type !== "warmup"));
   const volume = working.reduce((n, s) => n + s.weight * s.reps, 0);
   const totalSets = working.length;
+  const totalReps = working.reduce((n, s) => n + s.reps, 0);
   const durMin = Math.max(1, Math.round((finishedMs - parseDbDate(startedAt).getTime()) / 60000));
+
+  // XP this session + where it leaves your cosmic level. Lifetime XP comes from
+  // /api/stats (already includes this session, since it's saved), so we derive
+  // the pre-session level to detect a level-up and animate the bar filling.
+  const sessionXp = xpForSession({ workingSets: totalSets, reps: totalReps, finished: true });
+  const [stats, setStats] = useState<ProgressSummary | null>(null);
+  useEffect(() => {
+    api<ProgressSummary>("/api/stats").then(setStats).catch(() => {});
+  }, []);
+  const level = stats?.level ?? null;
+  const leveledUp = stats
+    ? levelFromXp(Math.max(0, stats.totalXp - sessionXp)).level < stats.level.level
+    : false;
 
   return (
     <div>
       {logged.length > 0 ? (
         <>
-          {/* The reward: what you just did, loud, before any admin. */}
+          {/* The reward: XP earned and the cosmic level it moves you toward. */}
           <div className="mb-4 overflow-hidden rounded-[var(--radius-lg)] border border-accent/30 bg-gradient-to-b from-accent/12 to-transparent px-4 py-4 text-center">
-            <p className="display text-lg font-bold text-accent">Session done</p>
-            <p className="mt-0.5 text-sm text-muted">
-              {logged.length} {logged.length === 1 ? "exercise" : "exercises"} · nice work.
+            <p className="display text-lg font-bold text-accent">
+              {leveledUp ? "Level up!" : "Session done"}
             </p>
-            <div className="mt-3 grid grid-cols-3 gap-2">
-              <HeroStat
-                icon={<Dumbbell size={16} aria-hidden="true" />}
-                value={<CountUp value={Math.round(volume)} format={(n) => fmtWeight(Math.round(n), unit)} />}
-                label={`${unit} moved`}
+            <p className="mt-0.5 text-sm text-muted">
+              {leveledUp && level
+                ? `You reached ${level.name} · Level ${level.level}`
+                : `${logged.length} ${logged.length === 1 ? "exercise" : "exercises"} · nice work.`}
+            </p>
+
+            {/* XP earned, big */}
+            <div className="mt-3 flex items-baseline justify-center gap-1.5">
+              <CountUp
+                value={sessionXp}
+                format={(n) => `+${Math.round(n)}`}
+                className="stat-num text-5xl font-bold leading-none text-accent"
               />
+              <span className="text-xl font-bold text-accent">XP</span>
+            </div>
+
+            {/* level progress bar */}
+            {level && (
+              <div className="mx-auto mt-3 max-w-[16rem]">
+                <div className="mb-1 flex items-center justify-between text-[0.7rem]">
+                  <span className="font-semibold text-foreground">
+                    {level.name} · Lv {level.level}
+                  </span>
+                  <span className="stat-num text-muted">
+                    {Math.round(level.into)} / {level.need}
+                  </span>
+                </div>
+                <div className="h-2.5 w-full overflow-hidden rounded-full bg-surface-3">
+                  <div
+                    className="h-full rounded-full bg-accent transition-[width] duration-700 ease-out"
+                    style={{ width: `${Math.round(level.progress * 100)}%` }}
+                  />
+                </div>
+                <p className="mt-1 text-[0.65rem] text-muted">
+                  {level.need - Math.round(level.into)} XP to {level.nextName}
+                </p>
+              </div>
+            )}
+
+            {/* secondary counts */}
+            <div className="mt-3 grid grid-cols-3 gap-2">
               <HeroStat
                 icon={<Layers size={16} aria-hidden="true" />}
                 value={<CountUp value={totalSets} />}
                 label="sets"
+              />
+              <HeroStat
+                icon={<Trophy size={16} aria-hidden="true" />}
+                value={<CountUp value={prNames.length} />}
+                label={prNames.length === 1 ? "PR" : "PRs"}
               />
               <HeroStat
                 icon={<Timer size={16} aria-hidden="true" />}
@@ -1091,9 +1206,39 @@ function FinishSummary({
           className="w-full resize-none rounded-[var(--radius-md)] border border-border bg-background px-3 py-2 text-sm outline-none focus:border-accent"
         />
       </label>
+
+      {/* A little reward for finishing — a sports/training fact to send you off. */}
+      <div className="mt-4 flex items-start gap-2.5 rounded-[var(--radius-md)] border border-border bg-surface-2 p-3">
+        <Sparkles size={16} className="mt-0.5 shrink-0 text-accent" aria-hidden="true" />
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-wider text-muted">Did you know?</p>
+          <p className="mt-0.5 text-sm text-muted-strong">{SPORTS_FACTS[finishedMs % SPORTS_FACTS.length]}</p>
+        </div>
+      </div>
     </div>
   );
 }
+
+// Rotating end-of-session fun facts about sport, training and the body. Indexed
+// by the session's finish time so it varies session to session (no Math.random
+// in render — that would trip React 19 purity).
+const SPORTS_FACTS: string[] = [
+  "Your muscles don't grow during a workout — they grow while you rest and sleep afterward.",
+  "Grip strength is one of the best predictors of overall longevity in large studies.",
+  "The 2-minute rest between heavy sets isn't lazy — it measurably boosts strength and muscle gain.",
+  "Delayed muscle soreness (DOMS) peaks about 24–72 hours after training, not the next morning.",
+  "You're strongest in the lowering (eccentric) phase — you can lower more than you can lift.",
+  "Usain Bolt's top speed hit ~44.7 km/h — over a car's city speed limit, on foot.",
+  "Elite marathoners burn roughly 2,500+ calories in a single race.",
+  "Muscle is denser than fat, so the scale can stall even as you get visibly leaner.",
+  "Drinking water before a set can help — even mild dehydration cuts strength and endurance.",
+  "The soleus in your calf can generate enough force to launch you off the ground repeatedly for hours.",
+  "Progressive overload — adding a little weight or reps over time — is the single biggest driver of gains.",
+  "A single set taken close to failure builds nearly as much muscle as three easy ones.",
+  "Your heart is a muscle too: endurance training can lower a resting pulse below 40 bpm in elite athletes.",
+  "Sleep is a performance drug — under 7 hours measurably drops strength, power and reaction time.",
+  "Bone gets stronger from lifting, just like muscle — resistance training raises bone density.",
+];
 
 // Share the session — the "look what I did" moment top apps use to make finishing
 // feel worth showing off. Web Share where available (native sheet), clipboard
@@ -1309,39 +1454,20 @@ function fmtClock(secs: number): string {
 }
 
 const PHASE_CONFIG = {
-  warmup: {
-    title: "Warm up",
-    lead: "Prime your body before the working sets.",
-    primary: "Start workout",
-    skip: "Skip warm-up",
-    seconds: 300,
-    tips: [
-      "5 min light cardio: bike, row or brisk walk",
-      "Dynamic stretches and mobility for today's muscles",
-      "1 to 2 light ramp-up sets on your first lift",
-    ],
-  },
-  cooldown: {
-    title: "Cool down",
-    lead: "Bring your heart rate down and help recovery.",
-    primary: "Finish workout",
-    skip: "Skip cool-down",
-    seconds: 180,
-    tips: [
-      "3 to 5 min easy walk or light cardio",
-      "Static stretches for the muscles you trained",
-      "Slow nasal breathing for a minute",
-    ],
-  },
+  warmup: { title: "Warm up", primary: "Start workout", skip: "Skip warm-up", seconds: 300 },
+  cooldown: { title: "Cool down", primary: "Finish workout", skip: "Skip cool-down", seconds: 180 },
 } as const;
 
 function PhaseScreen({
   kind,
+  plan,
   onPrimary,
   onSkip,
   busy,
 }: {
   kind: "warmup" | "cooldown";
+  // dynamic content for today's session (muscles + first lift)
+  plan: { lead: string; tips: string[] };
   onPrimary: () => void;
   onSkip: () => void;
   busy?: boolean;
@@ -1356,12 +1482,12 @@ function PhaseScreen({
         </span>
         <div>
           <h1 className="display text-2xl font-bold leading-tight">{cfg.title}</h1>
-          <p className="text-sm text-muted">{cfg.lead}</p>
+          <p className="text-sm text-muted">{plan.lead}</p>
         </div>
       </div>
 
       <ul className="flex flex-col gap-2">
-        {cfg.tips.map((t) => (
+        {plan.tips.map((t) => (
           <li
             key={t}
             className="flex items-start gap-2.5 rounded-[var(--radius-md)] border border-border bg-surface px-3 py-3 text-sm"

@@ -144,14 +144,29 @@ export function getAlternatives(
     (e) => e.muscleGroup === base.muscleGroup && e.id !== base.id,
   );
 
+  // 3) top-up: if the primary-muscle pool is thin (traps, calves, forearms…),
+  // pull in moves that SHARE a muscle (primary or secondary) so there are always
+  // at least a handful of real options — the "never a dead end, ≥5 swaps" rule.
+  const baseMuscles = new Set([base.muscleGroup, ...(base.secondary ?? [])]);
+  const shareMuscle = EXERCISES.filter(
+    (e) =>
+      e.id !== base.id &&
+      (baseMuscles.has(e.muscleGroup) || (e.secondary ?? []).some((m) => baseMuscles.has(m))),
+  );
+
   const seen = new Set<string>();
-  const pool = [...curated, ...sameMuscle].filter((e) => {
+  const pool = [...curated, ...sameMuscle, ...shareMuscle].filter((e) => {
     if (seen.has(e.id)) return false;
     seen.add(e.id);
     return true;
   });
 
   return pool.sort((a, b) => score(b) - score(a));
+}
+
+/** Convenience: the top N swaps, guaranteed to be at least `min` when the library allows. */
+export function alternativesFor(exerciseId: string, available: Equipment[] = []): Exercise[] {
+  return getAlternatives(exerciseId, { available });
 }
 
 // ── Workout suggestion ────────────────────────────────────────────────────

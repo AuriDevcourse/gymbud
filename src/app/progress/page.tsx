@@ -6,17 +6,21 @@ import {
   listRuns,
   listSessions,
   loggedExerciseIds,
+  progressSummary,
+  topLifts,
 } from "@/lib/store";
 
 export const dynamic = "force-dynamic";
 
 export default async function ProgressPage() {
-  const [ids, bodyweight, sessions, runs, profile] = await Promise.all([
+  const [ids, bodyweight, sessions, runs, profile, lifts, summary] = await Promise.all([
     loggedExerciseIds(),
     listBodyWeight(),
     listSessions(),
     listRuns(),
     getProfile(),
+    topLifts(6),
+    progressSummary(),
   ]);
   const exercises = ids
     .map((id) => ({ id, name: EXERCISES_BY_ID[id]?.name ?? id }))
@@ -30,6 +34,8 @@ export default async function ProgressPage() {
       runs={runs}
       unit={profile.unit}
       goal={profile.goal}
+      topLifts={lifts}
+      summary={summary}
     />
   );
 }
