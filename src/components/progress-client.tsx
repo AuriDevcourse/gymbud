@@ -23,12 +23,14 @@ import {
   Trophy,
 } from "lucide-react";
 import { Button, Card, EmptyState, SectionTitle } from "./ui";
+import { CountUp } from "./count-up";
 import { WeightDelta } from "./weight-delta";
 import { Skeleton } from "./skeleton";
 import { useApi } from "@/lib/swr";
 import { api, fmtDuration, fmtWeight } from "@/lib/format";
 import { weightTrend } from "@/lib/bodyweight";
 import { dayLabel, parseDbDate, relativeDay, todayISO } from "@/lib/date";
+import { xpForSession } from "@/lib/levels";
 import type { ExercisePoint, ProgressSummary, SessionSummary, TopLift } from "@/lib/store";
 import type { Exercise } from "@/lib/exercise-library";
 import { RUN_KIND_LABELS, type BodyWeightEntry, type Goal, type Run, type Unit } from "@/lib/types";
@@ -129,9 +131,9 @@ export function ProgressClient({
 
       {/* Overview — level + this week at a glance */}
       <div className="grid grid-cols-3 gap-2">
-        <Tile icon={<Star size={17} aria-hidden="true" />} value={`Lv ${summary.level.level}`} label={summary.level.name} accent />
-        <Tile icon={<Flame size={17} aria-hidden="true" />} value={summary.streak} label="wk streak" />
-        <Tile icon={<Layers size={17} aria-hidden="true" />} value={summary.thisWeekSets} label="sets / wk" />
+        <Tile icon={<Star size={17} aria-hidden="true" />} value={`Lv ${summary.level.level}`} label={summary.level.name} accent delay={0} />
+        <Tile icon={<Flame size={17} aria-hidden="true" />} value={summary.streak} label="wk streak" delay={70} />
+        <Tile icon={<Layers size={17} aria-hidden="true" />} value={summary.thisWeekSets} label="sets / wk" delay={140} />
       </div>
 
       {/* Total work trend */}
@@ -159,7 +161,8 @@ export function ProgressClient({
             {topLifts.map((l, i) => (
               <li
                 key={l.exerciseId}
-                className="flex items-center gap-3 rounded-[var(--radius-md)] border border-border bg-surface px-3 py-2.5"
+                className="animate-rise flex items-center gap-3 rounded-[var(--radius-md)] border border-border bg-surface px-3 py-2.5"
+                style={{ animationDelay: `${i * 50}ms` }}
               >
                 <span
                   className={`stat-num flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-bold ${
@@ -333,12 +336,13 @@ export function ProgressClient({
           />
         ) : (
           <ul className="flex flex-col gap-2">
-            {rows.map((s) => {
+            {rows.map((s, i) => {
               const mins = durationMin(s);
               return (
                 <li
                   key={s.id}
-                  className="overflow-hidden rounded-[var(--radius-md)] border border-border bg-surface"
+                  className="animate-rise overflow-hidden rounded-[var(--radius-md)] border border-border bg-surface"
+                  style={{ animationDelay: `${Math.min(i, 8) * 45}ms` }}
                 >
                   <div className="flex items-stretch">
                     <span className="w-1 shrink-0 bg-accent/70" aria-hidden="true" />
@@ -361,7 +365,7 @@ export function ProgressClient({
                         </div>
                         {s.setCount > 0 && (
                           <span className="stat-num shrink-0 rounded-full bg-accent/10 px-2.5 py-1 text-xs font-semibold text-accent">
-                            +{s.setCount * 12} XP
+                            +{xpForSession({ workingSets: s.setCount, reps: s.reps, finished: !!s.finishedAt })} XP
                           </span>
                         )}
                       </div>
@@ -378,7 +382,7 @@ export function ProgressClient({
                           <span className="stat-num font-semibold text-foreground">
                             {s.setCount}
                           </span>{" "}
-                          sets
+                          {s.setCount === 1 ? "set" : "sets"}
                         </span>
                         {s.volume > 0 && (
                           <span className="flex items-center gap-1">
@@ -433,17 +437,24 @@ function Tile({
   value,
   label,
   accent,
+  delay = 0,
 }: {
   icon: React.ReactNode;
   value: string | number;
   label: string;
   accent?: boolean;
+  delay?: number;
 }) {
   return (
-    <div className="flex flex-col items-center gap-1 rounded-[var(--radius-md)] border border-border bg-surface py-3 shadow-[var(--shadow-card)]">
+    <div
+      className="animate-tile flex flex-col items-center gap-1 rounded-[var(--radius-md)] border border-border bg-surface py-3 shadow-[var(--shadow-card)]"
+      style={{ animationDelay: `${delay}ms` }}
+    >
       <span className={accent ? "text-accent" : "text-muted"}>{icon}</span>
-      <span className="stat-num text-lg font-bold leading-none">{value}</span>
-      <span className="text-[0.55rem] uppercase tracking-wider text-muted">{label}</span>
+      <span className="stat-num text-xl font-bold leading-none">
+        {typeof value === "number" ? <CountUp value={value} /> : value}
+      </span>
+      <span className="text-[0.62rem] uppercase tracking-wider text-muted">{label}</span>
     </div>
   );
 }

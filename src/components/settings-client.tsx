@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeft, Check, Loader2, Lock } from "lucide-react";
-import { Button, SectionTitle } from "./ui";
+import { Button, LoadError, SectionTitle } from "./ui";
 import { api } from "@/lib/format";
 import { peek, poke } from "@/lib/swr";
 import { PageSkeleton } from "./skeleton";
@@ -80,7 +80,10 @@ export function SettingsClient() {
     }
   };
 
-  if (!p) return <PageSkeleton />;
+  if (!p) {
+    if (error) return <LoadError message={error} />;
+    return <PageSkeleton />;
+  }
 
   const toggleEquip = (e: Equipment) => {
     const has = p.equipment.includes(e);

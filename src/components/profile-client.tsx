@@ -16,11 +16,13 @@ import {
   TrendingUp,
   Trophy,
 } from "lucide-react";
-import { Card, SectionTitle } from "./ui";
+import { Card, LoadError, SectionTitle } from "./ui";
+import { CountUp } from "./count-up";
 import { api } from "@/lib/format";
 import { peek, poke } from "@/lib/swr";
 import { PageSkeleton } from "./skeleton";
 import { relativeDay } from "@/lib/date";
+import { xpForSession } from "@/lib/levels";
 import type { Profile } from "@/lib/types";
 import type { ProgressSummary, SessionSummary } from "@/lib/store";
 
@@ -84,7 +86,10 @@ export function ProfileClient() {
     }
   };
 
-  if (!p) return <PageSkeleton />;
+  if (!p) {
+    if (error) return <LoadError message={error} />;
+    return <PageSkeleton />;
+  }
 
   const level = stats?.level;
   const badges = stats?.badges ?? [];
@@ -151,9 +156,9 @@ export function ProfileClient() {
       {/* Quick stats */}
       {stats && (
         <div className="grid grid-cols-3 gap-2">
-          <StatTile icon={<Flame size={17} aria-hidden="true" />} value={stats.streak} label={`wk streak`} accent />
-          <StatTile icon={<Dumbbell size={17} aria-hidden="true" />} value={stats.totalWorkouts} label="workouts" />
-          <StatTile icon={<Layers size={17} aria-hidden="true" />} value={stats.totalSets} label="total sets" />
+          <StatTile icon={<Flame size={17} aria-hidden="true" />} value={stats.streak} label={`wk streak`} accent delay={0} />
+          <StatTile icon={<Dumbbell size={17} aria-hidden="true" />} value={stats.totalWorkouts} label="workouts" delay={70} />
+          <StatTile icon={<Layers size={17} aria-hidden="true" />} value={stats.totalSets} label="total sets" delay={140} />
         </div>
       )}
 
@@ -166,19 +171,21 @@ export function ProfileClient() {
           </Card>
         ) : (
           <ul className="flex flex-col gap-1.5">
-            {sessions.map((s) => (
+            {sessions.map((s, i) => (
               <li
                 key={s.id}
-                className="flex items-center justify-between gap-2 rounded-[var(--radius-md)] border border-border bg-surface px-3 py-2.5"
+                className="animate-rise flex items-center justify-between gap-2 rounded-[var(--radius-md)] border border-border bg-surface px-3 py-2.5"
+                style={{ animationDelay: `${i * 55}ms` }}
               >
                 <div className="min-w-0">
                   <p className="font-medium">{relativeDay(s.startedAt)}</p>
                   <p className="text-xs text-muted">
-                    {s.exerciseCount} {s.exerciseCount === 1 ? "exercise" : "exercises"} · {s.setCount} sets
+                    {s.exerciseCount} {s.exerciseCount === 1 ? "exercise" : "exercises"} ·{" "}
+                    {s.setCount} {s.setCount === 1 ? "set" : "sets"}
                   </p>
                 </div>
                 <span className="stat-num shrink-0 rounded-full bg-accent/10 px-2.5 py-1 text-xs font-semibold text-accent">
-                  +{s.setCount * 12} XP
+                  +{xpForSession({ workingSets: s.setCount, reps: s.reps, finished: true })} XP
                 </span>
               </li>
             ))}
@@ -192,16 +199,17 @@ export function ProfileClient() {
           Achievements
         </SectionTitle>
         <div className="grid grid-cols-3 gap-2">
-          {[...earned, ...locked].map((b) => {
+          {[...earned, ...locked].map((b, i) => {
             const Icon = ICONS[b.icon] ?? Trophy;
             return (
               <div
                 key={b.id}
-                className={`flex flex-col items-center gap-1.5 rounded-[var(--radius-md)] border p-3 text-center ${
+                className={`animate-rise flex flex-col items-center gap-1.5 rounded-[var(--radius-md)] border p-3 text-center ${
                   b.earned
                     ? "border-accent/40 bg-accent/5"
                     : "border-border bg-surface opacity-60"
                 }`}
+                style={{ animationDelay: `${i * 40}ms` }}
               >
                 <span
                   className={`relative flex h-11 w-11 items-center justify-center rounded-full ${
@@ -234,17 +242,24 @@ function StatTile({
   value,
   label,
   accent,
+  delay = 0,
 }: {
   icon: React.ReactNode;
   value: number;
   label: string;
   accent?: boolean;
+  delay?: number;
 }) {
   return (
-    <div className="flex flex-col items-center gap-1 rounded-[var(--radius-md)] border border-border bg-surface py-3 shadow-[var(--shadow-card)]">
+    <div
+      className="animate-tile flex flex-col items-center gap-1 rounded-[var(--radius-md)] border border-border bg-surface py-3 shadow-[var(--shadow-card)]"
+      style={{ animationDelay: `${delay}ms` }}
+    >
       <span className={accent ? "text-accent" : "text-muted"}>{icon}</span>
-      <span className="stat-num text-xl font-bold leading-none">{value.toLocaleString()}</span>
-      <span className="text-[0.58rem] uppercase tracking-wider text-muted">{label}</span>
+      <span className="stat-num text-2xl font-bold leading-none">
+        <CountUp value={value} />
+      </span>
+      <span className="text-[0.62rem] uppercase tracking-wider text-muted">{label}</span>
     </div>
   );
 }

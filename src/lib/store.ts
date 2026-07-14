@@ -37,6 +37,12 @@ async function run(
 const num = (v: unknown) => Number(v);
 const str = (v: unknown) => String(v);
 
+// Epley estimated 1-rep max, guarded so a true 1-rep set IS the 1RM (no ×1.03
+// inflation that could out-rank a heavier top set). One source of truth for PRs,
+// top lifts and charts. SQL paths mirror this with a CASE on reps.
+const epley = (weight: number, reps: number) => (reps <= 1 ? weight : weight * (1 + reps / 30));
+const EPLEY_SQL = "(CASE WHEN sl.reps <= 1 THEN sl.weight ELSE sl.weight * (1 + sl.reps / 30.0) END)";
+
 // ── Profile ───────────────────────────────────────────────────────────────
 export async function getProfile(): Promise<Profile> {
   const row = (await one("SELECT * FROM profile WHERE id = 1"))!;
@@ -179,7 +185,7 @@ export async function workoutStats(): Promise<WorkoutStats> {
      FROM session s
      JOIN session_exercise se ON se.session_id = s.id
      JOIN set_log sl          ON sl.session_exercise_id = se.id
-     WHERE s.started_at >= ?`,
+     WHERE s.started_at >= ? AND sl.type != 'warmup'`,
     [weekAgo.toISOString().slice(0, 19).replace("T", " ")],
   );
 
@@ -201,7 +207,8 @@ export interface SessionSummary {
   finishedAt: string | null;
   note: string | null;
   exerciseCount: number;
-  setCount: number;
+  setCount: number; // working sets (warm-ups excluded) — matches XP + the finish screen
+  reps: number; // working reps, for a consistent XP figure everywhere
   volume: number;
 }
 
@@ -209,8 +216,9 @@ export async function listSessions(limit = 60): Promise<SessionSummary[]> {
   const rows = await all(
     `SELECT s.id, s.started_at, s.finished_at, s.note,
             COUNT(DISTINCT se.id) AS exercise_count,
-            COUNT(sl.id)          AS set_count,
-            COALESCE(SUM(sl.weight * sl.reps), 0) AS volume
+            SUM(CASE WHEN sl.type != 'warmup' AND sl.id IS NOT NULL THEN 1 ELSE 0 END) AS set_count,
+            COALESCE(SUM(CASE WHEN sl.type != 'warmup' THEN sl.reps ELSE 0 END), 0) AS reps,
+            COALESCE(SUM(CASE WHEN sl.type != 'warmup' THEN sl.weight * sl.reps ELSE 0 END), 0) AS volume
      FROM session s
      LEFT JOIN session_exercise se ON se.session_id = s.id
      LEFT JOIN set_log sl          ON sl.session_exercise_id = se.id
@@ -226,6 +234,7 @@ export async function listSessions(limit = 60): Promise<SessionSummary[]> {
     note: r.note === null ? null : str(r.note),
     exerciseCount: num(r.exercise_count),
     setCount: num(r.set_count),
+    reps: num(r.reps),
     volume: num(r.volume),
   }));
 }
@@ -459,7 +468,7 @@ export async function isSetPR(
 ): Promise<boolean> {
   if (weight <= 0) return false;
   const row = await one(
-    `SELECT MAX(sl.weight * (1 + sl.reps / 30.0)) AS best
+    `SELECT MAX(${EPLEY_SQL}) AS best
      FROM set_log sl
      JOIN session_exercise se ON se.id = sl.session_exercise_id
      WHERE se.exercise_id = (SELECT exercise_id FROM session_exercise WHERE id = ?)
@@ -469,7 +478,7 @@ export async function isSetPR(
   );
   const best = row && row.best !== null ? num(row.best) : 0;
   if (best <= 0) return false; // no prior history to beat
-  return weight * (1 + reps / 30) > best;
+  return epley(weight, reps) > best;
 }
 
 export interface ExercisePoint {
@@ -510,7 +519,7 @@ export async function exerciseHistory(exerciseId: string): Promise<ExercisePoint
       topWeight,
       reps,
       volume: num(r.volume),
-      est1rm: Math.round(topWeight * (1 + reps / 30)),
+      est1rm: Math.round(epley(topWeight, reps)),
     });
   }
   return points;
@@ -529,7 +538,7 @@ export interface TopLift {
 export async function topLifts(limit = 6): Promise<TopLift[]> {
   const rows = await all(
     `SELECT se.exercise_id AS id, sl.weight AS weight, sl.reps AS reps,
-            (sl.weight * (1 + sl.reps / 30.0)) AS e1rm
+            ${EPLEY_SQL} AS e1rm
      FROM session_exercise se
      JOIN set_log sl ON sl.session_exercise_id = se.id
      WHERE sl.type != 'warmup' AND sl.weight > 0`,

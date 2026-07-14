@@ -86,17 +86,21 @@ function sessionTitle(exercises: SessionExercise[]): string {
 function celebrate(intense = false) {
   if (typeof window === "undefined") return;
   if (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) return;
-  import("canvas-confetti").then(({ default: confetti }) => {
-    confetti({
-      particleCount: intense ? 160 : 34,
-      spread: intense ? 95 : 55,
-      startVelocity: intense ? 48 : 28,
-      origin: { y: intense ? 0.55 : 0.8 },
-      colors: ["#c8f135", "#ff6a2b", "#46d18a", "#ffffff"],
-      scalar: intense ? 1.1 : 0.8,
-      disableForReducedMotion: true,
+  import("canvas-confetti")
+    .then(({ default: confetti }) => {
+      confetti({
+        particleCount: intense ? 160 : 34,
+        spread: intense ? 95 : 55,
+        startVelocity: intense ? 48 : 28,
+        origin: { y: intense ? 0.55 : 0.8 },
+        colors: ["#c8f135", "#ff6a2b", "#46d18a", "#ffffff"],
+        scalar: intense ? 1.1 : 0.8,
+        disableForReducedMotion: true,
+      });
+    })
+    .catch(() => {
+      /* chunk failed to load (e.g. offline) — a celebration isn't worth crashing over */
     });
-  });
 }
 
 const ACTIVE_KEY = "active-session";
@@ -220,6 +224,9 @@ export function WorkoutClient() {
       (async () => {
         try {
           const s = await api<Session>("/api/sessions", { method: "POST" });
+          // If a workout was already open, POST returns THAT session — so the lifts
+          // you just picked would be silently ignored. Resume it, but say so.
+          const resumedNonEmpty = s.exercises.length > 0 && ids.length > 0;
           let exercises = s.exercises;
           if (exercises.length === 0 && ids.length) {
             const added: SessionExercise[] = [];
@@ -236,7 +243,8 @@ export function WorkoutClient() {
           const full = { ...s, exercises };
           setSession(full);
           poke(ACTIVE_KEY, full);
-          setPhase("warmup");
+          setPhase(resumedNonEmpty ? "main" : "warmup");
+          if (resumedNonEmpty) setToast({ msg: "Picked up your workout already in progress" });
         } catch (e) {
           if (!cancelled) setError((e as Error).message);
         } finally {
@@ -353,10 +361,16 @@ export function WorkoutClient() {
 
   const removeExercise = async (se: SessionExercise) => {
     const snapshot = session;
+    const name = EXERCISES_BY_ID[se.exerciseId]?.name ?? "exercise";
     patch((s) => ({ ...s, exercises: s.exercises.filter((e) => e.id !== se.id) }));
     setCurrent((c) => Math.max(0, c - (c > 0 ? 1 : 0)));
     try {
       await api(`/api/session-exercises/${se.id}`, { method: "DELETE" });
+      // Give a way back — removal discards any logged sets, so match swap's undo.
+      setToast({
+        msg: `Removed ${name}`,
+        undo: snapshot ? () => addExercise(EXERCISES_BY_ID[se.exerciseId]) : undefined,
+      });
     } catch (e) {
       if (snapshot) setSession(snapshot);
       setError((e as Error).message);
@@ -1059,6 +1073,14 @@ function FinishSummary({
   const leveledUp = stats
     ? levelFromXp(Math.max(0, stats.totalXp - sessionXp)).level < stats.level.level
     : false;
+  // A cosmic promotion deserves a burst — fires once when the level-up resolves.
+  const celebratedRef = useRef(false);
+  useEffect(() => {
+    if (leveledUp && !celebratedRef.current) {
+      celebratedRef.current = true;
+      celebrate(true);
+    }
+  }, [leveledUp]);
 
   return (
     <div>
