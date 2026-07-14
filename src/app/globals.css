@@ -67,8 +67,12 @@ html {
   background: var(--background);
   color-scheme: dark;
   /* Always reserve the scrollbar track so the centered layout never jumps
-     sideways when navigating between a scrolling and a non-scrolling page. */
+     sideways when navigating between a scrolling page (Exercises) and a
+     non-scrolling one (Programs). scrollbar-gutter alone doesn't take effect
+     here because html is height:100% and the body becomes the scroll container,
+     so we also force the track with overflow-y: scroll. */
   scrollbar-gutter: stable;
+  overflow-y: scroll;
   -webkit-text-size-adjust: 100%;
   text-size-adjust: 100%;
 }
