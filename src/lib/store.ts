@@ -185,7 +185,7 @@ export async function workoutStats(): Promise<WorkoutStats> {
      FROM session s
      JOIN session_exercise se ON se.session_id = s.id
      JOIN set_log sl          ON sl.session_exercise_id = se.id
-     WHERE s.started_at >= ? AND sl.type != 'warmup'`,
+     WHERE s.started_at >= ? AND COALESCE(sl.type, 'normal') != 'warmup'`,
     [weekAgo.toISOString().slice(0, 19).replace("T", " ")],
   );
 
@@ -216,9 +216,9 @@ export async function listSessions(limit = 60): Promise<SessionSummary[]> {
   const rows = await all(
     `SELECT s.id, s.started_at, s.finished_at, s.note,
             COUNT(DISTINCT se.id) AS exercise_count,
-            SUM(CASE WHEN sl.type != 'warmup' AND sl.id IS NOT NULL THEN 1 ELSE 0 END) AS set_count,
-            COALESCE(SUM(CASE WHEN sl.type != 'warmup' THEN sl.reps ELSE 0 END), 0) AS reps,
-            COALESCE(SUM(CASE WHEN sl.type != 'warmup' THEN sl.weight * sl.reps ELSE 0 END), 0) AS volume
+            SUM(CASE WHEN COALESCE(sl.type, 'normal') != 'warmup' AND sl.id IS NOT NULL THEN 1 ELSE 0 END) AS set_count,
+            COALESCE(SUM(CASE WHEN COALESCE(sl.type, 'normal') != 'warmup' THEN sl.reps ELSE 0 END), 0) AS reps,
+            COALESCE(SUM(CASE WHEN COALESCE(sl.type, 'normal') != 'warmup' THEN sl.weight * sl.reps ELSE 0 END), 0) AS volume
      FROM session s
      LEFT JOIN session_exercise se ON se.session_id = s.id
      LEFT JOIN set_log sl          ON sl.session_exercise_id = se.id
@@ -473,7 +473,7 @@ export async function isSetPR(
      JOIN session_exercise se ON se.id = sl.session_exercise_id
      WHERE se.exercise_id = (SELECT exercise_id FROM session_exercise WHERE id = ?)
        AND sl.session_exercise_id != ?
-       AND sl.type != 'warmup'`,
+       AND COALESCE(sl.type, 'normal') != 'warmup'`,
     [sessionExerciseId, sessionExerciseId],
   );
   const best = row && row.best !== null ? num(row.best) : 0;
@@ -541,7 +541,7 @@ export async function topLifts(limit = 6): Promise<TopLift[]> {
             ${EPLEY_SQL} AS e1rm
      FROM session_exercise se
      JOIN set_log sl ON sl.session_exercise_id = se.id
-     WHERE sl.type != 'warmup' AND sl.weight > 0`,
+     WHERE COALESCE(sl.type, 'normal') != 'warmup' AND sl.weight > 0`,
   );
   // best set (by est-1RM) per exercise
   const best = new Map<string, { weight: number; reps: number; e1rm: number }>();
@@ -619,7 +619,7 @@ export async function progressSummary(): Promise<ProgressSummary> {
             COALESCE(SUM(sl.reps), 0) AS reps,
             COALESCE(SUM(sl.weight * sl.reps), 0) AS volume
      FROM set_log sl
-     WHERE sl.type != 'warmup'`,
+     WHERE COALESCE(sl.type, 'normal') != 'warmup'`,
   );
   const totalSets = num(agg?.sets ?? 0);
   const totalReps = num(agg?.reps ?? 0);

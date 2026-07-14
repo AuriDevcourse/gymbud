@@ -361,15 +361,17 @@ export function WorkoutClient() {
 
   const removeExercise = async (se: SessionExercise) => {
     const snapshot = session;
-    const name = EXERCISES_BY_ID[se.exerciseId]?.name ?? "exercise";
+    const exercise = EXERCISES_BY_ID[se.exerciseId];
+    const name = exercise?.name ?? "exercise";
     patch((s) => ({ ...s, exercises: s.exercises.filter((e) => e.id !== se.id) }));
     setCurrent((c) => Math.max(0, c - (c > 0 ? 1 : 0)));
     try {
       await api(`/api/session-exercises/${se.id}`, { method: "DELETE" });
       // Give a way back — removal discards any logged sets, so match swap's undo.
+      // Only offer undo when we actually have the exercise to re-add.
       setToast({
         msg: `Removed ${name}`,
-        undo: snapshot ? () => addExercise(EXERCISES_BY_ID[se.exerciseId]) : undefined,
+        undo: snapshot && exercise ? () => addExercise(exercise) : undefined,
       });
     } catch (e) {
       if (snapshot) setSession(snapshot);
@@ -919,6 +921,7 @@ export function WorkoutClient() {
         <div className="flex gap-2">
           {(Object.keys(DIFFICULTY_LABELS) as Difficulty[]).map((d) => (
             <button
+              type="button"
               key={d}
               onClick={() => {
                 const p = ratePrompt;
@@ -1005,6 +1008,7 @@ function InlineRating({
       <div className="flex gap-1.5">
         {DIFFS.map((d) => (
           <button
+            type="button"
             key={d}
             onClick={() => onRate(d)}
             aria-pressed={value === d}
@@ -1189,6 +1193,7 @@ function FinishSummary({
                   <div className="flex gap-1.5">
                     {DIFFS.map((d) => (
                       <button
+                        type="button"
                         key={d}
                         onClick={() => rate(e.id, d)}
                         aria-pressed={rated[e.id] === d}
@@ -1557,14 +1562,22 @@ function PhaseTimer({ seconds }: { seconds: number }) {
   const done = left === 0;
   const running = endsAt !== null && !done;
 
-  // fire the rest-style cue once when it lands on zero
+  // fire the rest-style cue once when it lands on zero, then STOP the clock so the
+  // interval + visibilitychange listener tear down (they'd otherwise keep firing
+  // at 0 forever).
   const doneRef = useRef(false);
   useEffect(() => {
-    if (done && endsAt !== null && !doneRef.current) {
-      doneRef.current = true;
-      restDoneCue();
+    if (done && endsAt !== null) {
+      if (!doneRef.current) {
+        doneRef.current = true;
+        restDoneCue();
+      }
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setEndsAt(null);
+      setPaused(0);
+    } else if (!done) {
+      doneRef.current = false;
     }
-    if (!done) doneRef.current = false;
   }, [done, endsAt]);
 
   const startOrResume = () => setEndsAt(nowMs() + (done ? seconds : left) * 1000);

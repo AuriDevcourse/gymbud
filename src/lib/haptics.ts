@@ -38,6 +38,9 @@ function getCtx(): AudioContext | null {
     window.AudioContext ??
     (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
   if (!AC) return null;
+  // If the cached context was closed (by the browser or future code), drop it so
+  // we recreate a live one — otherwise the cues would fire into a dead context.
+  if (audioCtx && audioCtx.state === "closed") audioCtx = null;
   if (!audioCtx) {
     try {
       audioCtx = new AC();
