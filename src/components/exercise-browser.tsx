@@ -63,20 +63,23 @@ export function ExerciseBrowser() {
 
       <p className="-mt-1 text-xs text-muted">{results.length} exercises</p>
 
-      <ul className="flex flex-col gap-1.5">
+      {/* Compact 2-up grid — scan a lot of lifts at a glance instead of one long list */}
+      <ul className="grid grid-cols-2 gap-2">
         {results.map((e) => (
           <li key={e.id}>
             <button
               onClick={() => setDetail(e)}
-              className="flex w-full items-center justify-between gap-3 rounded-[var(--radius-md)] border border-border bg-surface px-3 py-3 text-left active:bg-surface-2"
+              className="flex h-full w-full flex-col items-start gap-2 rounded-[var(--radius-md)] border border-border bg-surface p-2.5 text-left active:bg-surface-2"
             >
-              <span className="min-w-0">
-                <span className="block truncate font-medium">{e.name}</span>
-                <span className="text-xs text-muted">
-                  {MUSCLE_LABELS[e.muscleGroup]} · {e.type}
+              <span className="line-clamp-2 text-sm font-medium leading-snug">{e.name}</span>
+              <span className="mt-auto flex w-full items-center justify-between gap-1.5">
+                <span className="truncate text-[0.7rem] text-muted">
+                  {MUSCLE_LABELS[e.muscleGroup]}
+                </span>
+                <span className="shrink-0 rounded-full bg-surface-2 px-2 py-0.5 text-[0.62rem] font-medium text-muted-strong">
+                  {EQUIPMENT_LABELS[e.equipment]}
                 </span>
               </span>
-              <Chip tone="muted">{EQUIPMENT_LABELS[e.equipment]}</Chip>
             </button>
           </li>
         ))}

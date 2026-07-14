@@ -43,11 +43,17 @@ export function Sheet({
         if (!items.length) return;
         const first = items[0];
         const last = items[items.length - 1];
-        const active = document.activeElement;
-        if (e.shiftKey && active === first) {
+        const active = document.activeElement as HTMLElement | null;
+        const index = active ? items.indexOf(active) : -1;
+        // Focus is outside the dialog (browser shortcut / assistive tech): pull it
+        // back in rather than letting Tab escape.
+        if (index === -1) {
+          e.preventDefault();
+          (e.shiftKey ? last : first).focus();
+        } else if (e.shiftKey && index === 0) {
           e.preventDefault();
           last.focus();
-        } else if (!e.shiftKey && active === last) {
+        } else if (!e.shiftKey && index === items.length - 1) {
           e.preventDefault();
           first.focus();
         }

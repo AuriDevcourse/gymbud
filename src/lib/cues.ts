@@ -52,7 +52,11 @@ const RULES: Rule[] = [
   },
   {
     pattern: "Overhead press",
-    test: (_e, n) => n.includes("overhead") || n.includes("shoulder press") || n.includes("military") || n.includes("arnold"),
+    // Gate on the shoulders muscle group so an "Overhead Triceps Extension"
+    // falls through to the triceps rule instead of getting shoulder-press cues.
+    test: (e, n) =>
+      e.muscleGroup === "shoulders" &&
+      (n.includes("overhead") || n.includes("shoulder press") || n.includes("military") || n.includes("arnold")),
     cues: [
       "Brace your abs and squeeze glutes so you don't lean back and press with your chest.",
       "Bar/dumbbells travel in a straight line past your forehead to full lockout.",

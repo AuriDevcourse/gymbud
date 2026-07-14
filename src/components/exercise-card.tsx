@@ -96,7 +96,15 @@ export function ExerciseCard({
   const lastTime = lastData?.last?.sets[lastData.last.sets.length - 1];
   const suggested =
     lastData?.target.suggestedWeight != null
-      ? Math.max(0, Math.round((lastData.target.suggestedWeight * readinessFactor()) / step) * step)
+      ? (() => {
+          const adjusted = Math.max(
+            0,
+            Math.round((lastData.target.suggestedWeight * readinessFactor()) / step) * step,
+          );
+          // Don't let a readiness nudge + rounding drop a real coach number to 0
+          // (which would read as "bodyweight"). Keep the original in that case.
+          return showWeight && adjusted === 0 ? lastData.target.suggestedWeight : adjusted;
+        })()
       : undefined;
   const initialWeight = !showWeight
     ? 0
