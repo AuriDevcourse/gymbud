@@ -27,7 +27,7 @@ export async function GET(
         working(last?.sets ?? []),
         profile.goal,
         profile.unit,
-        null,
+        se.difficulty, // honor the RPE the lifter just tapped (was ignored)
         EXERCISES_BY_ID[se.exerciseId],
       );
       return {

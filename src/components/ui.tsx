@@ -113,3 +113,26 @@ export function EmptyState({
     </div>
   );
 }
+
+// Shown when a page's data fetch fails — a real message + retry, never a
+// permanent skeleton. Reloads the route to re-run the fetch.
+export function LoadError({ message }: { message?: string }) {
+  return (
+    <div className="flex flex-col items-center gap-2 rounded-[var(--radius-lg)] border border-danger/30 bg-danger/5 px-6 py-10 text-center">
+      <p className="text-base font-semibold text-foreground">Couldn&apos;t load this</p>
+      <p className="max-w-[28ch] text-sm text-muted">
+        {message || "Something went wrong fetching your data."}
+      </p>
+      <Button
+        variant="accent"
+        size="lg"
+        className="mt-2"
+        onClick={() => {
+          if (typeof window !== "undefined") window.location.reload();
+        }}
+      >
+        Try again
+      </Button>
+    </div>
+  );
+}

@@ -504,10 +504,19 @@ function SetRow({
         Delete
       </button>
       <div
+        role="button"
+        tabIndex={0}
+        aria-label={`Edit set ${index + 1}: ${label}`}
         onPointerDown={onDown}
         onPointerMove={onMove}
         onPointerUp={onEnd}
         onPointerCancel={onEnd}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            onEdit(); // keyboard path to edit (and delete, from the edit sheet)
+          }
+        }}
         onClick={() => {
           if (revealed) {
             setRevealed(false);
@@ -522,7 +531,7 @@ function SetRow({
           transition: dragging ? "none" : "transform 0.18s ease",
           touchAction: "pan-y",
         }}
-        className="relative flex select-none items-center gap-2 bg-surface-2 px-2.5 py-2.5"
+        className="relative flex cursor-pointer select-none items-center gap-2 bg-surface-2 px-2.5 py-2.5 focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent"
       >
         <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-surface-3 text-[0.65rem] font-bold text-muted-strong">
           {index + 1}

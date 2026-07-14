@@ -4,6 +4,7 @@ import { ChevronRight, Dumbbell, Flame, Scale, TrendingUp } from "lucide-react";
 import { Card, SectionTitle } from "@/components/ui";
 import { SuggestionCard } from "@/components/suggestion-card";
 import { ProgramHomeCard } from "@/components/program-home-card";
+import { CountUp } from "@/components/count-up";
 import { RecoveryMap } from "@/components/body-map";
 import { RunLogger } from "@/components/run-logger";
 import {
@@ -54,7 +55,7 @@ export default async function Home() {
           <div className="animate-pop flex shrink-0 flex-col items-center rounded-[var(--radius-md)] bg-accent/10 px-3 py-2 text-accent">
             <Flame size={18} aria-hidden="true" />
             <span className="stat-num text-xl font-bold leading-none">{stats.streak}</span>
-            <span className="text-[0.55rem] uppercase tracking-wider">wk streak</span>
+            <span className="text-[0.62rem] uppercase tracking-wider">wk streak</span>
           </div>
         )}
       </header>
@@ -75,17 +76,19 @@ export default async function Home() {
 
       {/* Quick stats — labelled tiles, tap for the full picture */}
       <Link href="/progress" className="grid grid-cols-4 gap-2">
-        <Stat icon={<Flame size={17} aria-hidden="true" />} value={String(stats.streak)} label="streak" accent />
-        <Stat icon={<Dumbbell size={17} aria-hidden="true" />} value={String(stats.thisWeekSets)} label="sets wk" />
+        <Stat icon={<Flame size={17} aria-hidden="true" />} countTo={stats.streak} value={String(stats.streak)} label="streak" accent delay={0} />
+        <Stat icon={<Dumbbell size={17} aria-hidden="true" />} countTo={stats.thisWeekSets} value={String(stats.thisWeekSets)} label="sets wk" delay={60} />
         <Stat
           icon={<Scale size={17} aria-hidden="true" />}
           value={bwTrend.current ? `${fmtWeight(bwTrend.current.weight)}` : "–"}
           label={bwTrend.current ? profile.unit : "weight"}
+          delay={120}
         />
         <Stat
           icon={<TrendingUp size={17} aria-hidden="true" />}
           value={lastDone ? shortAgo(lastDone.startedAt) : "–"}
           label="last"
+          delay={180}
         />
       </Link>
 
@@ -155,19 +158,28 @@ function shortAgo(s: string): string {
 function Stat({
   icon,
   value,
+  countTo,
   label,
   accent,
+  delay = 0,
 }: {
   icon: React.ReactNode;
   value: string;
+  countTo?: number;
   label: string;
   accent?: boolean;
+  delay?: number;
 }) {
   return (
-    <div className="flex flex-col items-center gap-1 rounded-[var(--radius-md)] border border-border bg-surface py-2.5 shadow-[var(--shadow-card)]">
+    <div
+      className="animate-tile flex flex-col items-center gap-1 rounded-[var(--radius-md)] border border-border bg-surface py-2.5 shadow-[var(--shadow-card)]"
+      style={{ animationDelay: `${delay}ms` }}
+    >
       <span className={accent ? "text-accent" : "text-muted"}>{icon}</span>
-      <span className="stat-num text-xl font-bold leading-none">{value}</span>
-      <span className="text-[0.58rem] uppercase tracking-wider text-muted">{label}</span>
+      <span className="stat-num text-2xl font-bold leading-none">
+        {countTo !== undefined ? <CountUp value={countTo} /> : value}
+      </span>
+      <span className="text-[0.62rem] uppercase tracking-wider text-muted">{label}</span>
     </div>
   );
 }
