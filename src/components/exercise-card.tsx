@@ -72,6 +72,9 @@ export function ExerciseCard({
   const mode = ex ? weightMode(ex) : "total";
   const showWeight = ex ? hasWeight(ex) : true;
   const step = ex ? weightStep(ex, unit) : unit === "kg" ? 2.5 : 5;
+  // Fine nudge below the main +/- — the smallest real plate, per unit
+  // (1.25 kg vs 2.5 lb), so machines/cables aren't stuck on coarse jumps.
+  const fine = unit === "lb" ? 2.5 : 1.25;
   const wl = ex ? weightLabel(ex, unit) : { label: `Weight (${unit})` };
 
   // set being edited (tap a logged set to fix a mistake)
@@ -206,18 +209,18 @@ export function ExerciseCard({
             <div className="mt-2 flex gap-2">
               <div className="flex flex-1 justify-center gap-2">
                 <button
-                  onClick={() => adjust(-1.25)}
-                  aria-label={`Decrease weight by 1.25 ${unit}`}
+                  onClick={() => adjust(-fine)}
+                  aria-label={`Decrease weight by ${fine} ${unit}`}
                   className="stat-num rounded-full border border-border bg-surface-2 px-3 py-1 text-xs text-foreground active:bg-surface-3"
                 >
-                  −1.25
+                  −{fine}
                 </button>
                 <button
-                  onClick={() => adjust(1.25)}
-                  aria-label={`Increase weight by 1.25 ${unit}`}
+                  onClick={() => adjust(fine)}
+                  aria-label={`Increase weight by ${fine} ${unit}`}
                   className="stat-num rounded-full border border-border bg-surface-2 px-3 py-1 text-xs text-foreground active:bg-surface-3"
                 >
-                  +1.25
+                  +{fine}
                 </button>
               </div>
               <div className="flex-1" aria-hidden="true" />

@@ -103,7 +103,13 @@ function bestMatch(ex: Exercise, db: DbEntry[]): DbEntry | null {
       if (wantEquip.includes(e.equipment.toLowerCase())) s += 3;
       else s -= 4;
     }
-    if (e.primaryMuscles?.some((m) => wantMuscle.includes(m.toLowerCase()))) s += 2;
+    // Muscle group is a hard discriminator: reward a match, PENALISE a clear
+    // mismatch. Without this, a "Machine Lateral Raise" (shoulders) could match a
+    // "Machine Calf Raise" just on the shared words "machine" + "raise".
+    if (e.primaryMuscles?.length) {
+      if (e.primaryMuscles.some((m) => wantMuscle.includes(m.toLowerCase()))) s += 3;
+      else s -= 6;
+    }
     // Wrong-variant guard: every modifier our lift has must appear in the match.
     for (const m of exMods) if (!name.includes(m)) s -= 6;
     for (const t of nameTokens) if (!exSet.has(t) && !STOP.has(t)) s -= 1;

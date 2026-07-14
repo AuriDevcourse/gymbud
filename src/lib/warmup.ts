@@ -9,7 +9,10 @@ import { MUSCLE_LABELS } from "./types";
 interface Plan {
   lead: string;
   tips: string[];
+  seconds: number; // suggested duration, scaled to the session (not a flat 5 min)
 }
+
+const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
 
 // Mobility drills to PRIME each muscle before working sets.
 const PRIME: Record<MuscleGroup, string> = {
@@ -102,6 +105,8 @@ export function warmupPlan(exerciseIds: string[], seed = 0): Plan {
       ? `Prime ${joinMuscles(top)} before the working sets.`
       : "Prime your body before the working sets.",
     tips,
+    // Longer warm-up for a bigger session; ~2–5 min, not a flat 5.
+    seconds: clamp(90 + 35 * exerciseIds.length, 120, 300),
   };
 }
 
@@ -121,5 +126,6 @@ export function cooldownPlan(exerciseIds: string[], seed = 0): Plan {
   return {
     lead: "Bring your heart rate down and help recovery.",
     tips,
+    seconds: clamp(60 + 20 * exerciseIds.length, 90, 240),
   };
 }
