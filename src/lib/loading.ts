@@ -84,9 +84,29 @@ export function targetSetsFor(
   ex: Pick<Exercise, "type" | "muscleGroup">,
 ): number {
   const role = (ex.type === "compound" ? 1 : 0) + (LARGE_MUSCLES.has(ex.muscleGroup) ? 1 : 0);
-  if (goal === "strength") return [3, 4, 5][role];
-  if (goal === "muscle_gain") return [2, 3, 4][role];
-  return [2, 2, 3][role]; // fat_loss, general
+  let sets: number;
+  if (goal === "strength") sets = [3, 4, 5][role];
+  else if (goal === "muscle_gain") sets = [2, 3, 4][role];
+  else sets = [2, 2, 3][role]; // fat_loss, general
+  // Abs are high-rep, fatigue-resistant work — 2 sets barely touches them. Give
+  // core at least 3 so an ab finisher is actually a stimulus.
+  if (ex.muscleGroup === "core") sets = Math.max(sets, 3);
+  return sets;
+}
+
+// Rest between sets — longer for heavy compounds, shorter for isolation and
+// small muscles, so a squat isn't rested like a calf raise. Snapped to 15s.
+export function restSecondsFor(goal: Goal, ex?: Pick<Exercise, "type" | "muscleGroup">): number {
+  const base = goal === "strength" ? 165 : goal === "muscle_gain" ? 100 : goal === "fat_loss" ? 50 : 80;
+  let mult = 1;
+  if (ex) {
+    if (ex.type === "compound" && LARGE_MUSCLES.has(ex.muscleGroup)) mult = 1.3; // big lifts
+    else if (ex.type === "compound") mult = 1.1;
+    else if (ex.muscleGroup === "core" || ex.muscleGroup === "calves" || ex.muscleGroup === "forearms")
+      mult = 0.6; // small, quick-recovering muscles
+    else mult = 0.8; // other isolation
+  }
+  return Math.round((base * mult) / 15) * 15;
 }
 
 // One-line "why this dose" caption for the card.

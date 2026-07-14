@@ -91,7 +91,7 @@ const SCHEMA = `
 `;
 
 // Bump when the demo-matching algorithm changes, to drop stale (wrong) matches.
-const DEMO_MATCH_VERSION = "3";
+const DEMO_MATCH_VERSION = "5";
 
 async function migrate(c: Client): Promise<void> {
   await c.executeMultiple(SCHEMA);

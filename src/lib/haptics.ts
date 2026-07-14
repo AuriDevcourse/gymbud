@@ -54,25 +54,28 @@ export function primeAudio(): void {
   if (ctx && ctx.state === "suspended") ctx.resume().catch(() => {});
 }
 
-/** Rest is over: a rising double-beep (the cue that actually lands on iPhone) plus a buzz. */
+/** Rest is over: a soft rising three-note chime (a pleasant "you're up") plus a buzz. */
 export function restDoneCue(): void {
-  buzz([0, 120, 80, 120]);
+  buzz([0, 90, 70, 90]);
   const ctx = getCtx();
   if (!ctx) return;
   if (ctx.state === "suspended") ctx.resume().catch(() => {});
-  const beep = (offset: number, freq: number) => {
+  // A gentle C5–E5–G5 major arpeggio: warm triangle tone, soft attack, a hint of
+  // overlap so it rings like a chime rather than three flat beeps.
+  const note = (offset: number, freq: number, dur = 0.32, peak = 0.28) => {
     const t = ctx.currentTime + offset;
     const osc = ctx.createOscillator();
     const gain = ctx.createGain();
-    osc.type = "sine";
+    osc.type = "triangle";
     osc.frequency.value = freq;
     gain.gain.setValueAtTime(0.0001, t);
-    gain.gain.exponentialRampToValueAtTime(0.35, t + 0.02);
-    gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.22);
+    gain.gain.exponentialRampToValueAtTime(peak, t + 0.03);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t + dur);
     osc.connect(gain).connect(ctx.destination);
     osc.start(t);
-    osc.stop(t + 0.24);
+    osc.stop(t + dur + 0.02);
   };
-  beep(0, 880);
-  beep(0.24, 1175);
+  note(0, 523.25); // C5
+  note(0.14, 659.25); // E5
+  note(0.28, 783.99, 0.5, 0.32); // G5, held a touch longer to resolve
 }

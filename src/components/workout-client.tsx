@@ -34,7 +34,7 @@ import { CountUp } from "./count-up";
 import { peek, poke, useApi } from "@/lib/swr";
 import { parseDbDate } from "@/lib/date";
 import { getAlternatives } from "@/lib/coach";
-import { targetSetsFor } from "@/lib/loading";
+import { targetSetsFor, restSecondsFor } from "@/lib/loading";
 import { xpForSession, levelFromXp } from "@/lib/levels";
 import { warmupPlan, cooldownPlan } from "@/lib/warmup";
 import type { ProgressSummary } from "@/lib/store";
@@ -61,12 +61,6 @@ type RecRow = { exerciseId: string; name: string; recommendation: Recommendation
 // monotonic negative ids for optimistic (not-yet-saved) sets
 let tempSetId = -1;
 
-function restSeconds(goal: Goal): number {
-  if (goal === "strength") return 180;
-  if (goal === "muscle_gain") return 90;
-  if (goal === "fat_loss") return 45;
-  return 75;
-}
 
 // A short label for what this session is, from the muscles it trains.
 function sessionTitle(exercises: SessionExercise[]): string {
@@ -428,7 +422,7 @@ export function WorkoutClient() {
     celebrate(false);
     tapHaptic(); // physical tick the instant a set is logged
     primeAudio(); // unlock audio inside this tap so the rest-end beep works on iOS
-    const ends = Date.now() + restSeconds(goal) * 1000;
+    const ends = Date.now() + restSecondsFor(goal, EXERCISES_BY_ID[se.exerciseId]) * 1000;
     setRestEndsAt(ends);
     if (session) store.set(restKeyFor(session.id), String(ends));
     try {
@@ -738,7 +732,7 @@ export function WorkoutClient() {
             {restEndsAt && (
               <RestBar
                 endsAt={restEndsAt}
-                total={restSeconds(goal)}
+                total={restSecondsFor(goal, targetEx)}
                 onChange={(end) => {
                   setRestEndsAt(end);
                   if (session) store.set(restKeyFor(session.id), String(end));
@@ -1454,8 +1448,8 @@ function fmtClock(secs: number): string {
 }
 
 const PHASE_CONFIG = {
-  warmup: { title: "Warm up", primary: "Start workout", skip: "Skip warm-up", seconds: 300 },
-  cooldown: { title: "Cool down", primary: "Finish workout", skip: "Skip cool-down", seconds: 180 },
+  warmup: { title: "Warm up", primary: "Start workout", skip: "Skip warm-up" },
+  cooldown: { title: "Cool down", primary: "Finish workout", skip: "Skip cool-down" },
 } as const;
 
 function PhaseScreen({
@@ -1467,7 +1461,7 @@ function PhaseScreen({
 }: {
   kind: "warmup" | "cooldown";
   // dynamic content for today's session (muscles + first lift)
-  plan: { lead: string; tips: string[] };
+  plan: { lead: string; tips: string[]; seconds: number };
   onPrimary: () => void;
   onSkip: () => void;
   busy?: boolean;
@@ -1498,7 +1492,7 @@ function PhaseScreen({
         ))}
       </ul>
 
-      <PhaseTimer seconds={cfg.seconds} />
+      <PhaseTimer key={plan.seconds} seconds={plan.seconds} />
 
       <div className="mt-auto flex flex-col gap-2 pt-6">
         <Button variant="accent" size="lg" onClick={onPrimary} disabled={busy}>
@@ -1514,23 +1508,52 @@ function PhaseScreen({
   );
 }
 
+// Wall-clock warm-up/cool-down timer: while running it derives the time left from
+// a target end-timestamp (not a decrementing counter), so leaving the app and
+// coming back — or the tab being backgrounded — no longer freezes or desyncs it.
 function PhaseTimer({ seconds }: { seconds: number }) {
-  const [left, setLeft] = useState(seconds);
-  const [running, setRunning] = useState(false);
+  const [endsAt, setEndsAt] = useState<number | null>(null); // set while running
+  const [paused, setPaused] = useState(seconds); // seconds shown when not running
+  const [now, setNow] = useState(nowMs);
 
   useEffect(() => {
-    if (!running || left === 0) return;
-    const t = setInterval(() => setLeft((l) => Math.max(0, l - 1)), 1000);
-    return () => clearInterval(t);
-  }, [running, left]);
+    if (endsAt === null) return;
+    const tick = () => setNow(nowMs());
+    tick();
+    const t = setInterval(tick, 500);
+    const onVis = () => {
+      if (!document.hidden) tick();
+    };
+    document.addEventListener("visibilitychange", onVis);
+    return () => {
+      clearInterval(t);
+      document.removeEventListener("visibilitychange", onVis);
+    };
+  }, [endsAt]);
 
-  useEffect(() => {
-    if (left === 0 && typeof navigator !== "undefined" && navigator.vibrate) {
-      navigator.vibrate(180);
-    }
-  }, [left]);
-
+  const left = endsAt !== null ? Math.max(0, Math.round((endsAt - now) / 1000)) : paused;
   const done = left === 0;
+  const running = endsAt !== null && !done;
+
+  // fire the rest-style cue once when it lands on zero
+  const doneRef = useRef(false);
+  useEffect(() => {
+    if (done && endsAt !== null && !doneRef.current) {
+      doneRef.current = true;
+      restDoneCue();
+    }
+    if (!done) doneRef.current = false;
+  }, [done, endsAt]);
+
+  const startOrResume = () => setEndsAt(nowMs() + (done ? seconds : left) * 1000);
+  const pause = () => {
+    setPaused(left);
+    setEndsAt(null);
+  };
+  const reset = () => {
+    setEndsAt(null);
+    setPaused(seconds);
+  };
 
   return (
     <div className="mt-4 flex items-center gap-3 rounded-[var(--radius-md)] border border-border bg-surface px-4 py-3">
@@ -1540,23 +1563,13 @@ function PhaseTimer({ seconds }: { seconds: number }) {
       </span>
       <div className="ml-auto flex gap-1.5">
         <button
-          onClick={() => {
-            if (done) {
-              setLeft(seconds);
-              setRunning(true);
-            } else {
-              setRunning((r) => !r);
-            }
-          }}
+          onClick={running ? pause : startOrResume}
           className="rounded-md border border-border bg-surface-2 px-3 py-1.5 text-xs font-medium active:bg-surface-3"
         >
           {done ? "Restart" : running ? "Pause" : "Start"}
         </button>
         <button
-          onClick={() => {
-            setRunning(false);
-            setLeft(seconds);
-          }}
+          onClick={reset}
           className="rounded-md border border-border bg-surface-2 px-3 py-1.5 text-xs font-medium text-muted active:bg-surface-3"
         >
           Reset

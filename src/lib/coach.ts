@@ -217,7 +217,7 @@ const LENGTH_COUNT: Record<WorkoutLength, number> = { short: 4, medium: 6, long:
 
 const FOCUS_MUSCLES: Record<Exclude<WorkoutFocus, "auto">, MuscleGroup[]> = {
   full_body: ["quads", "back", "chest", "shoulders", "hamstrings", "core"],
-  upper: ["back", "chest", "shoulders", "traps", "biceps", "triceps"],
+  upper: ["back", "chest", "shoulders", "traps", "biceps", "triceps", "core"],
   lower: ["quads", "hamstrings", "glutes", "calves"],
   push: ["chest", "shoulders", "triceps"],
   pull: ["back", "traps", "biceps", "forearms"],
@@ -271,7 +271,7 @@ export function suggestWorkout(opts: {
       focus = ["quads", "hamstrings", "glutes", "calves"];
     } else {
       title = "Upper Body";
-      focus = ["back", "chest", "shoulders", "biceps", "triceps"];
+      focus = ["back", "chest", "shoulders", "biceps", "triceps", "core"];
     }
   } else {
     const order = (["push", "pull", "legs"] as (keyof typeof BUCKETS)[]).sort(
@@ -349,6 +349,24 @@ function selectExercises(
       ),
     );
     if (ex) picked.push(ex);
+  }
+
+  // Guarantee an ab/core move when core is targeted. Core has no compound to
+  // anchor a pass-1 slot, so it kept getting squeezed out — leaving sessions
+  // looking like abs only come from cardio. Swap out an overflow pick if needed.
+  if (muscles.includes("core") && !picked.some((p) => p.muscleGroup === "core")) {
+    const core = choose(
+      EXERCISES.filter(
+        (e) =>
+          e.muscleGroup === "core" &&
+          isAvailable(e, available) &&
+          !picked.some((p) => p.id === e.id),
+      ),
+    );
+    if (core) {
+      if (picked.length >= maxCount) picked[picked.length - 1] = core;
+      else picked.push(core);
+    }
   }
 
   // compounds first in the final order
