@@ -738,6 +738,7 @@ export function WorkoutClient() {
   // warm-up sets don't count toward the working-set target
   const setsDone = se ? se.sets.filter((s) => s.type !== "warmup").length : 0;
   const setsComplete = setsDone >= target;
+  const loggedSets = loggedSetCount(session); // for the discard confirm copy
 
   return (
     <div className="pb-4">
@@ -940,9 +941,9 @@ export function WorkoutClient() {
 
       <Sheet open={discardOpen} onClose={() => setDiscardOpen(false)} title="Discard workout?">
         <p className="text-sm text-muted-strong">
-          {loggedSetCount(session) > 0
-            ? `This deletes the workout and its ${loggedSetCount(session)} logged ${
-                loggedSetCount(session) === 1 ? "set" : "sets"
+          {loggedSets > 0
+            ? `This deletes the workout and its ${loggedSets} logged ${
+                loggedSets === 1 ? "set" : "sets"
               }. This can't be undone.`
             : "Nothing's been logged yet — this just closes the empty workout."}
         </p>
