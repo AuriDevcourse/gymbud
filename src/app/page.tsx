@@ -7,6 +7,7 @@ import { ProgramHomeCard } from "@/components/program-home-card";
 import { CountUp } from "@/components/count-up";
 import { RecoveryMap } from "@/components/body-map";
 import { RunLogger } from "@/components/run-logger";
+import { StartCustom } from "@/components/start-custom";
 import {
   activeSession,
   daysSinceByMuscle,
@@ -112,6 +113,8 @@ export default async function Home() {
         </SectionTitle>
         <RecoveryMap daysSince={daysSince} />
       </Card>
+
+      <StartCustom />
 
       <RunLogger />
 

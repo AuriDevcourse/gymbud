@@ -17,6 +17,7 @@ import {
   Sparkles,
   StickyNote,
   Timer,
+  Trash2,
   Trophy,
   Undo2,
   X,
@@ -154,6 +155,10 @@ function initialRest(): number | null {
   return Number.isFinite(ends) && ends > Date.now() ? ends : null;
 }
 
+function loggedSetCount(s: Session): number {
+  return s.exercises.reduce((n, e) => n + e.sets.length, 0);
+}
+
 export function WorkoutClient() {
   const router = useRouter();
 
@@ -175,8 +180,13 @@ export function WorkoutClient() {
   const [current, setCurrent] = useState(initialPos);
   const [lastMap, setLastMap] = useState<Record<string, LastData>>({});
   const [pickerOpen, setPickerOpen] = useState(false);
+  // Build-your-own intent: set when we arrive with openPicker, honored once the
+  // (empty) session is ready — a ref so it survives StrictMode's double-invoke,
+  // which consumes the pending key on the first pass.
+  const openPickerRef = useRef(false);
   const [restEndsAt, setRestEndsAt] = useState<number | null>(initialRest); // wall-clock end
   const [noteOpen, setNoteOpen] = useState(false);
+  const [discardOpen, setDiscardOpen] = useState(false);
   const [toast, setToast] = useState<{ msg: string; undo?: () => void } | null>(null);
 
   const [finishOpen, setFinishOpen] = useState(false);
@@ -208,7 +218,7 @@ export function WorkoutClient() {
   useEffect(() => {
     let cancelled = false;
 
-    let pending: { exerciseIds: string[] } | null = null;
+    let pending: { exerciseIds: string[]; openPicker?: boolean } | null = null;
     try {
       const raw = sessionStorage.getItem(PENDING_WORKOUT_KEY);
       if (raw) pending = JSON.parse(raw);
@@ -219,6 +229,7 @@ export function WorkoutClient() {
     if (pending) {
       // navigated here optimistically — create the session now
       sessionStorage.removeItem(PENDING_WORKOUT_KEY);
+      if (pending.openPicker) openPickerRef.current = true;
       // de-dupe so a program day (or shuffle) can never seed the same lift twice
       const ids = [...new Set(pending.exerciseIds ?? [])];
       (async () => {
@@ -243,7 +254,10 @@ export function WorkoutClient() {
           const full = { ...s, exercises };
           setSession(full);
           poke(ACTIVE_KEY, full);
-          setPhase(resumedNonEmpty ? "main" : "warmup");
+          // Build-your-own: no seeded lifts, so skip the warm-up (the effect
+          // below opens the picker). A resumed or seeded workout keeps its flow.
+          const buildYourOwn = pending?.openPicker && !resumedNonEmpty && exercises.length === 0;
+          setPhase(resumedNonEmpty || buildYourOwn ? "main" : "warmup");
           if (resumedNonEmpty) setToast({ msg: "Picked up your workout already in progress" });
         } catch (e) {
           if (!cancelled) setError((e as Error).message);
@@ -292,6 +306,17 @@ export function WorkoutClient() {
   useEffect(() => {
     poke(ACTIVE_KEY, session);
   }, [session]);
+
+  // Build-your-own: open the picker once the session is loaded and still empty,
+  // regardless of which load path resolved it (fresh create OR resumed empty
+  // session). Runs once, then clears the intent.
+  useEffect(() => {
+    if (loaded && openPickerRef.current && session && session.exercises.length === 0) {
+      openPickerRef.current = false;
+      setPhase("main");
+      setPickerOpen(true);
+    }
+  }, [loaded, session]);
 
   // Persist which exercise you're on so a return trip lands where you left off.
   useEffect(() => {
@@ -573,6 +598,26 @@ export function WorkoutClient() {
     }
   };
 
+  // Throw away the current workout — deletes it server-side and clears local
+  // state, so the timer stops and home no longer shows "in progress".
+  const discard = async () => {
+    if (!session) return;
+    setBusy(true);
+    try {
+      await api(`/api/sessions/${session.id}`, { method: "DELETE" });
+      poke(ACTIVE_KEY, null);
+      store.del(posKey(session.id));
+      store.del(restKeyFor(session.id));
+      setRestEndsAt(null);
+      setDiscardOpen(false);
+      setSession(null);
+      router.push("/");
+    } catch (e) {
+      setError((e as Error).message);
+      setBusy(false);
+    }
+  };
+
   // RPE: rate how hard an exercise was; feeds next session's coach target.
   const rateDifficulty = async (seId: number, difficulty: Difficulty) => {
     patch((s) => ({
@@ -706,6 +751,13 @@ export function WorkoutClient() {
         <div className="flex shrink-0 items-center gap-2 text-muted">
           <ElapsedTimer startedAt={session.startedAt} />
           <button
+            onClick={() => setDiscardOpen(true)}
+            aria-label="Discard workout"
+            className="flex h-9 w-9 items-center justify-center rounded-[var(--radius-sm)] border border-border bg-surface-2 text-muted active:bg-surface-3"
+          >
+            <Trash2 size={16} aria-hidden="true" />
+          </button>
+          <button
             onClick={() => setNoteOpen(true)}
             aria-label={session.note ? "Edit session note" : "Add session note"}
             className={`flex h-9 w-9 items-center justify-center rounded-[var(--radius-sm)] border border-border bg-surface-2 active:bg-surface-3 ${
@@ -736,10 +788,18 @@ export function WorkoutClient() {
           title="Empty workout"
           hint="Add your first exercise to get going."
           action={
-            <Button variant="accent" size="lg" onClick={() => setPickerOpen(true)}>
-              <Plus size={18} aria-hidden="true" />
-              Add exercise
-            </Button>
+            <div className="flex flex-col items-center gap-3">
+              <Button variant="accent" size="lg" onClick={() => setPickerOpen(true)}>
+                <Plus size={18} aria-hidden="true" />
+                Add exercise
+              </Button>
+              <button
+                onClick={() => setDiscardOpen(true)}
+                className="text-sm font-medium text-muted underline-offset-4 hover:underline"
+              >
+                Discard workout
+              </button>
+            </div>
           }
         />
       ) : (
@@ -877,6 +937,25 @@ export function WorkoutClient() {
       )}
 
       <ExercisePicker open={pickerOpen} onClose={() => setPickerOpen(false)} onPick={addExercise} />
+
+      <Sheet open={discardOpen} onClose={() => setDiscardOpen(false)} title="Discard workout?">
+        <p className="text-sm text-muted-strong">
+          {loggedSetCount(session) > 0
+            ? `This deletes the workout and its ${loggedSetCount(session)} logged ${
+                loggedSetCount(session) === 1 ? "set" : "sets"
+              }. This can't be undone.`
+            : "Nothing's been logged yet — this just closes the empty workout."}
+        </p>
+        <div className="mt-4 flex gap-2">
+          <Button variant="surface" size="lg" className="flex-1" onClick={() => setDiscardOpen(false)}>
+            Keep going
+          </Button>
+          <Button variant="danger" size="lg" className="flex-1" onClick={discard} disabled={busy}>
+            {busy ? <Loader2 size={18} className="animate-spin" aria-hidden="true" /> : <Trash2 size={18} aria-hidden="true" />}
+            Discard
+          </Button>
+        </div>
+      </Sheet>
 
       <Sheet open={swapOpen && !!se} onClose={() => setSwapOpen(false)} title="Choose exercise">
         <ul className="flex flex-col gap-1.5">

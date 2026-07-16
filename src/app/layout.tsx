@@ -4,7 +4,7 @@ import "./globals.css";
 import { BottomNav } from "@/components/bottom-nav";
 import { NoZoom } from "@/components/no-zoom";
 import { WelcomeBack } from "@/components/welcome-back";
-import { Agentation } from "agentation";
+import { DevTools } from "@/components/dev-tools";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -65,7 +65,7 @@ export default function RootLayout({
         </main>
         <BottomNav />
         <WelcomeBack />
-        {process.env.NODE_ENV === "development" && <Agentation />}
+        <DevTools />
       </body>
     </html>
   );

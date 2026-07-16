@@ -1,10 +1,10 @@
 "use client";
 
 import { useMemo, useRef, useState } from "react";
-import Link from "next/link";
 import { ChevronRight, Clock, Flame, Shuffle } from "lucide-react";
-import { Button, Card, Chip, SectionTitle } from "./ui";
+import { Card, Chip, SectionTitle } from "./ui";
 import { StartSuggested } from "./start-suggested";
+import { StartCustom } from "./start-custom";
 import {
   suggestWorkout,
   FOCUS_LABELS,
@@ -135,13 +135,7 @@ export function SuggestionCard({
         {!hasActive && suggestion.exercises.length > 0 && (
           <StartSuggested exerciseIds={suggestion.exercises.map((e) => e.id)} />
         )}
-        {!hasActive && (
-          <Link href="/workout" className="mt-2 block">
-            <Button variant="ghost" className="w-full">
-              Or start an empty workout
-            </Button>
-          </Link>
-        )}
+        {!hasActive && <StartCustom as="link" />}
       </Card>
     </section>
   );
