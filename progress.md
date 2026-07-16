@@ -1,5 +1,27 @@
 # GymBud — Session Handoff
 
+## SESSION 2026-07-16 — "Build your own" ad-hoc workout (UNCOMMITTED, on branch `feat/build-your-own-workout`)
+Problem Auri hit: the empty-session + add-any-exercise engine already existed, but nothing surfaced it — the only doors into `/workout` were "Start suggested" and starting a program, and there's no Workout tab. So logging an ad-hoc session (e.g. a run day + a few abs/calf lifts) was impossible without starting a suggested workout and deleting everything.
+
+Fix (small, verified in-browser on :3001 via Chrome ext):
+- **New `src/components/start-custom.tsx`** — a home card "Build your own · Start a blank workout, add any exercises" (RunLogger-style, Plus icon). Writes the existing `PENDING_WORKOUT_KEY` hand-off with `{ exerciseIds: [], openPicker: true }` and pushes `/workout`.
+- **`app/page.tsx`** — renders `<StartCustom />` right above `<RunLogger />`.
+- **`workout-client.tsx`** — pending payload gains optional `openPicker`; a `openPickerRef` + a `[loaded, session]` effect opens the picker once the session is loaded AND empty, from EITHER load path. This survives React StrictMode's double-invoke (which consumes the pending key on the first pass) and the resumed-empty-session case (POST returns a stale empty active session). Build-your-own skips the warm-up (phase → main).
+- Verified: home card → `/workout` blank → picker auto-opens → searched "leg raise" (Hanging Leg Raise present) → added Push Up (bodyweight) → composer shows reps-only + "Log N reps". Both of Auri's exercises (`hanging-leg-raise`, `seated-calf-raise`) already exist in the library.
+
+### Follow-ups same session (Auri's real-usage list)
+- **Never-ending workout timer / phantom "in progress" session (FIXED).** Root cause: `activeSession()` returned ANY session with `finished_at IS NULL` forever, so an abandoned empty session showed a runaway elapsed timer (saw 15913:xx) and blocked starting a fresh one. Two fixes: (1) `store.ts activeSession()` now self-heals — an open session with **zero logged sets** older than 6h is deleted and treated as gone (orphan-safe: never touches a session with real sets). (2) New **Discard** action in `workout-client.tsx` — trash icon in the header + "Discard workout" link in the empty state → confirm Sheet (copy adapts: "nothing logged" vs "deletes N logged sets") → `DELETE /api/sessions/[id]`, clears local state, back to home. Verified: phantom card gone on load; discard returns home clean.
+- **Consistency:** the suggestion card's old low-key `<Link href="/workout">` "Or start an empty workout" went through the slow raw path (manual start → warm-up → add). Replaced with `<StartCustom as="link" />` so BOTH empty-start entry points now open the picker directly. `StartCustom` gained an `as="card" | "link"` prop. Removed now-unused `Link`/`Button` imports from suggestion-card.
+- **License findings (Sourcery/scanner on package-lock.json).** Honest read: none are real legal problems for a single-user self-hosted personal app. `sharp`/libvips **LGPL-3.0** = weak copyleft, dynamically-linked native binary, already a `dev` + `optional` dep → no source-release obligation (sharp is Next's default image optimizer, used commercially everywhere). `minimatch` **BlueOak-1.0.0** = permissive (MIT-equivalent), false alarm. `agentation` **PolyForm-Shield-1.0.0** = source-available; permits use, only bars building a competing product → fine for a gym app. The one real cleanup done: **moved `agentation` to `devDependencies`** (it's a dev-only visual toolbar, already render-gated) so the lockfile marks it `"dev": true` (scanner reclassifies as non-shipped, like sharp) AND rewrote `layout.tsx` to load it via a new dev-only lazy wrapper `components/dev-tools.tsx` — verified **agentation is fully eliminated from the production bundle** (`grep .next` = none).
+- **`.env.local` (new, holds an API key):** confirmed gitignored via `.env*` and NOT tracked by git — secret is safe, never committed. Not opened/read (no need to see the value). If it was ever committed in history, rotate it (SECURITY r2); it wasn't.
+
+lint + `tsc --noEmit` + production `next build` all clean. NOT committed/pushed (branch off main per WORKFLOW r1; main auto-deploys). Awaiting Auri's review before merge.
+Files this session: NEW `components/start-custom.tsx`, NEW `components/dev-tools.tsx`; edited `app/page.tsx`, `app/layout.tsx`, `components/workout-client.tsx`, `components/suggestion-card.tsx`, `lib/store.ts`, `package.json` (+ `package-lock.json`).
+
+**Deferred this session:** Strava integration — Auri chose "later, separate session". Only Strava is realistically connectable (Apple Health has no web API; Google Fit is deprecated → Health Connect, Android-only). It needs a registered Strava app (client id/secret), OAuth + token refresh, prod domain as redirect URL, and an importer writing into the existing `runs` table (~half-day).
+
+---
+
 ## SESSION 2026-07-05 (part 3) — UI overhaul + coach removal + feel/animations (SHIPPED to main / prod)
 All work below is COMMITTED + PUSHED to `main` (auto-deploys to Vercel prod). Latest commit `eeb1334`. Working tree clean. Verified in-browser via the Chrome extension (dev on :3011, phone-width viewport). Full competitive teardown + scorecard in `COMPETITIVE-ANALYSIS.md`.
 

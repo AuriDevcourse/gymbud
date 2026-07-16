@@ -239,11 +239,28 @@ export async function listSessions(limit = 60): Promise<SessionSummary[]> {
   }));
 }
 
+// An open session left running for this long with no logged sets is treated as
+// abandoned — its timer would otherwise count up forever and it blocks starting
+// a fresh workout. A real gym session never runs this long.
+const ABANDON_AFTER_MS = 6 * 60 * 60 * 1000; // 6 hours
+
 export async function activeSession(): Promise<Session | null> {
   const r = await one(
     "SELECT id FROM session WHERE finished_at IS NULL ORDER BY started_at DESC LIMIT 1",
   );
-  return r ? getSession(num(r.id)) : null;
+  if (!r) return null;
+  const s = await getSession(num(r.id));
+  if (!s) return null;
+
+  // Self-heal a phantom: an old open session with nothing logged is abandoned,
+  // so drop it. Never touches a session that has real sets in it.
+  const loggedSets = s.exercises.reduce((n, e) => n + e.sets.length, 0);
+  const ageMs = Date.now() - parseDbDate(s.startedAt).getTime();
+  if (loggedSets === 0 && ageMs > ABANDON_AFTER_MS) {
+    await deleteSession(s.id);
+    return null;
+  }
+  return s;
 }
 
 export async function getSession(id: number): Promise<Session | null> {
