@@ -3,7 +3,6 @@ import { Geist, Geist_Mono, Oswald } from "next/font/google";
 import "./globals.css";
 import { BottomNav } from "@/components/bottom-nav";
 import { NoZoom } from "@/components/no-zoom";
-import { WelcomeBack } from "@/components/welcome-back";
 import { DevTools } from "@/components/dev-tools";
 
 const geistSans = Geist({
@@ -64,7 +63,6 @@ export default function RootLayout({
           {children}
         </main>
         <BottomNav />
-        <WelcomeBack />
         <DevTools />
       </body>
     </html>

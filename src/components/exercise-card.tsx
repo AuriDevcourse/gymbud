@@ -30,7 +30,6 @@ import {
   type Unit,
 } from "@/lib/types";
 import { fmtWeight } from "@/lib/format";
-import { readinessFactor } from "@/lib/readiness";
 
 export interface LastData {
   last: { date: string; sets: SetLog[] } | null;
@@ -91,22 +90,11 @@ export function ExerciseCard({
   };
 
   // Prefill the composer from this exercise's last set, else last time / coach.
-  // The coach's suggested weight gets a small readiness nudge (from the
-  // "how strong today?" check) — up when you feel strong, down when drained.
+  // The coach's number is already snapped to real pins — use it as-is so the
+  // Prescription headline and the composer always agree.
   const lastThisSession = se.sets[se.sets.length - 1];
   const lastTime = lastData?.last?.sets[lastData.last.sets.length - 1];
-  const suggested =
-    lastData?.target.suggestedWeight != null
-      ? (() => {
-          const adjusted = Math.max(
-            0,
-            Math.round((lastData.target.suggestedWeight * readinessFactor()) / step) * step,
-          );
-          // Don't let a readiness nudge + rounding drop a real coach number to 0
-          // (which would read as "bodyweight"). Keep the original in that case.
-          return showWeight && adjusted === 0 ? lastData.target.suggestedWeight : adjusted;
-        })()
-      : undefined;
+  const suggested = lastData?.target.suggestedWeight ?? undefined;
   const initialWeight = !showWeight
     ? 0
     : (lastThisSession?.weight ??

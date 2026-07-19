@@ -69,7 +69,7 @@ export function SuggestionCard({
           </button>
         </div>
         {/* how much time you have — trims the session to fit */}
-        <div className="mb-2 flex items-center gap-1.5">
+        <div className="mb-1 flex items-center gap-1.5">
           <Clock size={15} className="shrink-0 text-muted" aria-hidden="true" />
           {LENGTHS.map((l) => (
             <button
@@ -86,6 +86,10 @@ export function SuggestionCard({
             </button>
           ))}
         </div>
+        {/* the chips are presets; this is what the actual selection costs */}
+        <p className="mb-2 pl-6 text-[0.7rem] text-muted">
+          ≈ {suggestion.estimatedMinutes} min as picked
+        </p>
         {/* pick a focus, or leave on Auto. Scrollbar hidden; arrow pages right. */}
         <div className="relative mb-3">
           <div ref={focusRow} className="no-scrollbar flex gap-1.5 overflow-x-auto pr-9">

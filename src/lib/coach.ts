@@ -5,7 +5,7 @@ import {
   type Exercise,
   type MuscleGroup,
 } from "./exercise-library";
-import { repRangeFor, snapWeight, weightStep } from "./loading";
+import { repRangeFor, restSecondsFor, snapWeight, targetSetsFor, weightStep } from "./loading";
 import { REP_RANGE, type Difficulty, type Goal, type Recommendation, type Unit } from "./types";
 
 type SetInput = { weight: number; reps: number };
@@ -56,12 +56,18 @@ export function recommendNext(
     return Math.round(snapped / grain) * grain;
   };
 
-  // Below the bottom of the range -> too heavy, ease off and rebuild.
+  // Below the bottom of the range -> too heavy, ease off and rebuild. The drop
+  // scales with the miss: one rep shy is a nudge, several short is a real reset.
   if (cur.reps < range.low) {
+    const steps = Math.min(3, Math.max(1, Math.round((range.low - cur.reps) / 2)));
     return {
       action: "back_off",
-      reason: `Only ${cur.reps} reps at ${cur.weight}${u}, below your ${range.low}-rep target. Drop a touch and own the form.`,
-      suggestedWeight: round(Math.max(0, cur.weight - step)),
+      reason:
+        steps > 1
+          ? `Only ${cur.reps} reps at ${cur.weight}${u}, well below your ${range.low}-rep target. That weight isn't yours yet — take a real drop and rebuild.`
+          : `Only ${cur.reps} reps at ${cur.weight}${u}, below your ${range.low}-rep target. Drop a touch and own the form.`,
+      // floor at one increment so a light isolation lift never drops to "0"
+      suggestedWeight: round(Math.max(step, cur.weight - steps * step)),
       lastTopSet: last,
     };
   }
@@ -182,6 +188,8 @@ export interface Suggestion {
   title: string;
   focus: MuscleGroup[];
   exercises: Exercise[];
+  /** honest duration of THIS pick (sets × rest + execution + warm-up), nearest 5 min */
+  estimatedMinutes: number;
 }
 
 // User-pickable workout focus. "auto" = let the coach decide from frequency.
@@ -286,8 +294,17 @@ export function suggestWorkout(opts: {
 
   const length = opts.length ?? "medium";
   const maxCount = LENGTH_COUNT[length] + (opts.goal === "fat_loss" ? 1 : 0);
-  const exercises = selectExercises(focus, available, opts.seed ?? 0, maxCount, opts.rotation ?? 0);
-  return { title, focus, exercises };
+  const exercises = selectExercises(focus, available, opts.seed ?? 0, maxCount, opts.rotation ?? 0, opts.goal);
+
+  // What this pick actually costs: per set, the rest plus ~45s of lifting,
+  // summed over the prescribed sets — plus ~5 min to warm up. The length chips
+  // stay quick presets; this number tells the truth about the selection.
+  const seconds = exercises.reduce(
+    (sum, ex) => sum + targetSetsFor(opts.goal, ex) * (restSecondsFor(opts.goal, ex) + 45),
+    0,
+  );
+  const estimatedMinutes = Math.round((seconds / 60 + 5) / 5) * 5;
+  return { title, focus, exercises, estimatedMinutes };
 }
 
 // tiny deterministic PRNG so a given seed always yields the same variation
@@ -305,6 +322,7 @@ function selectExercises(
   seed: number,
   maxCount: number,
   rotation: number,
+  goal: Goal,
 ): Exercise[] {
   const picked: Exercise[] = [];
   const rng = makeRng(seed);
@@ -323,9 +341,29 @@ function selectExercises(
     return cands[Math.floor(rng() * cands.length)];
   };
 
+  // Pass 1 can't eat every slot: on a long muscle list (full-body: 8 muscles,
+  // 6 slots) compounds used to fill the whole session, pass 2 never ran, and
+  // compound-less muscles (biceps, core) never appeared. Reserve a slot per
+  // focus muscle pass 1 cannot cover anyway — at most 2, so short sessions
+  // stay compound-first. Strength reserves nothing: those sessions are
+  // compound-first by design.
+  const reserved =
+    goal === "strength"
+      ? 0
+      : Math.min(
+          2,
+          muscles.filter(
+            (m) =>
+              !EXERCISES.some(
+                (e) => e.muscleGroup === m && e.type === "compound" && isAvailable(e, available),
+              ),
+          ).length,
+        );
+  const compoundCap = Math.max(1, maxCount - reserved);
+
   // Pass 1: one compound per target muscle (big movers).
   for (const m of muscles) {
-    if (picked.length >= maxCount) break;
+    if (picked.length >= compoundCap) break;
     const ex = choose(
       EXERCISES.filter(
         (e) =>
@@ -338,12 +376,17 @@ function selectExercises(
     if (ex) picked.push(ex);
   }
 
-  // Pass 2: fill remaining slots with isolation work. Cover muscles that got
-  // NOTHING in pass 1 first — biceps/forearms have no compounds, so without
-  // this they were always squeezed out by a second chest or back slot and the
-  // user "never sees a biceps exercise".
-  const covered = new Set(picked.map((p) => p.muscleGroup));
-  const fillOrder = [...muscles.filter((m) => !covered.has(m)), ...muscles.filter((m) => covered.has(m))];
+  // Pass 2: fill remaining slots with isolation work, neediest muscle first:
+  // entirely untouched, then touched only as a secondary (squats already brush
+  // hamstrings), then primary-covered. Two tiers matter — treating a secondary
+  // brush as full coverage collapsed the order to "first in the focus list"
+  // whenever the compounds' secondaries blanketed everything, and ignoring
+  // secondaries spent the reserved slots on a redundant leg curl instead of
+  // the biceps curl.
+  const primary = new Set(picked.map((p) => p.muscleGroup));
+  const secondary = new Set(picked.flatMap((p) => p.secondary ?? []));
+  const tier = (m: MuscleGroup) => (primary.has(m) ? 2 : secondary.has(m) ? 1 : 0);
+  const fillOrder = [...muscles].sort((a, b) => tier(a) - tier(b)); // stable: keeps focus order within a tier
   for (const m of fillOrder) {
     if (picked.length >= maxCount) break;
     const ex = choose(
