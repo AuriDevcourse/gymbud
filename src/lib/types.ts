@@ -38,8 +38,8 @@ export interface Run {
 }
 
 export interface WorkoutStats {
-  streak: number; // consecutive days with a workout or run, ending today/yesterday
-  thisWeekSets: number; // sets logged in the last 7 days
+  streak: number; // consecutive Monday-weeks (user's tz) with a workout or run
+  thisWeekSets: number; // working sets in the current Monday-week (user's tz)
   totalWorkouts: number; // finished sessions all-time
 }
 

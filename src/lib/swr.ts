@@ -15,6 +15,10 @@ export function peek<T>(key: string): T | undefined {
 export function poke<T>(key: string, val: T): void {
   mem.set(key, val);
 }
+/** Invalidate cached entries by key prefix (an exact key is its own prefix). */
+export function drop(prefix: string): void {
+  for (const k of [...mem.keys()]) if (k.startsWith(prefix)) mem.delete(k);
+}
 
 export interface SWRResult<T> {
   data: T | undefined;

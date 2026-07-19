@@ -187,17 +187,23 @@ export async function workoutStats(): Promise<WorkoutStats> {
     cursor.setDate(cursor.getDate() - 7);
   }
 
-  // sets in the last 7 days
-  const weekAgo = new Date();
-  weekAgo.setDate(weekAgo.getDate() - 7);
-  const weekRow = await one(
-    `SELECT COUNT(sl.id) AS sets
+  // Working sets in the CURRENT Monday-week (user's timezone) — the same week
+  // definition as the streak, so the two tiles can't disagree. The SQL bound
+  // just trims the scan; the real cut is the weekKey match.
+  const thisWeek = weekKey(new Date());
+  const setRows = await all(
+    `SELECT s.started_at, COUNT(sl.id) AS sets
      FROM session s
      JOIN session_exercise se ON se.session_id = s.id
      JOIN set_log sl          ON sl.session_exercise_id = se.id
-     WHERE s.started_at >= ? AND COALESCE(sl.type, 'normal') != 'warmup'`,
-    [weekAgo.toISOString().slice(0, 19).replace("T", " ")],
+     WHERE s.started_at >= datetime('now', '-8 days')
+       AND COALESCE(sl.type, 'normal') != 'warmup'
+     GROUP BY s.id`,
   );
+  let thisWeekSets = 0;
+  for (const r of setRows) {
+    if (weekKey(parseDbDate(str(r.started_at))) === thisWeek) thisWeekSets += num(r.sets);
+  }
 
   const totalRow = await one(
     "SELECT COUNT(*) AS n FROM session WHERE finished_at IS NOT NULL",
@@ -205,7 +211,7 @@ export async function workoutStats(): Promise<WorkoutStats> {
 
   return {
     streak,
-    thisWeekSets: num(weekRow?.sets ?? 0),
+    thisWeekSets,
     totalWorkouts: num(totalRow?.n ?? 0),
   };
 }
@@ -511,46 +517,47 @@ export async function isSetPR(
 
 export interface ExercisePoint {
   date: string;
-  topWeight: number;
-  reps: number;
-  volume: number;
+  topWeight: number; // weight of the session's best set (by est-1RM)
+  reps: number; // ...and that set's reps
+  volume: number; // working volume that session
   est1rm: number;
 }
+// Per-session best set by Epley est-1RM, warm-ups and weightless (bodyweight)
+// sets excluded — the SAME rules topLifts uses, so the chart and the Top-lifts
+// list always agree (and no flat-zero line for bodyweight-only logs).
 export async function exerciseHistory(exerciseId: string): Promise<ExercisePoint[]> {
   const rows = await all(
-    `SELECT s.started_at,
-            MAX(sl.weight) AS top_weight,
-            SUM(sl.weight * sl.reps) AS volume
+    `SELECT s.id AS sid, s.started_at, sl.weight, sl.reps
      FROM session_exercise se
      JOIN session s  ON s.id = se.session_id
      JOIN set_log sl ON sl.session_exercise_id = se.id
-     WHERE se.exercise_id = ?
-     GROUP BY s.id
-     ORDER BY s.started_at ASC`,
+     WHERE se.exercise_id = ? AND COALESCE(sl.type, 'normal') != 'warmup'
+       AND sl.weight > 0
+     ORDER BY s.started_at ASC, s.id ASC`,
     [exerciseId],
   );
 
-  const points: ExercisePoint[] = [];
+  const bySession = new Map<number, ExercisePoint>(); // keeps started_at order
+  const bestE1rm = new Map<number, number>();
   for (const r of rows) {
-    const topWeight = num(r.top_weight);
-    const rep = await one(
-      `SELECT MAX(sl.reps) AS reps
-       FROM session_exercise se
-       JOIN session s ON s.id = se.session_id
-       JOIN set_log sl ON sl.session_exercise_id = se.id
-       WHERE se.exercise_id = ? AND date(s.started_at) = date(?) AND sl.weight = ?`,
-      [exerciseId, str(r.started_at), topWeight],
-    );
-    const reps = rep && rep.reps !== null ? num(rep.reps) : 0;
-    points.push({
-      date: str(r.started_at),
-      topWeight,
-      reps,
-      volume: num(r.volume),
-      est1rm: Math.round(epley(topWeight, reps)),
-    });
+    const sid = num(r.sid);
+    const weight = num(r.weight);
+    const reps = num(r.reps);
+    let p = bySession.get(sid);
+    if (!p) {
+      p = { date: str(r.started_at), topWeight: weight, reps, volume: 0, est1rm: 0 };
+      bySession.set(sid, p);
+    }
+    p.volume += weight * reps;
+    const e1rm = epley(weight, reps);
+    if (e1rm > (bestE1rm.get(sid) ?? -1)) {
+      bestE1rm.set(sid, e1rm);
+      p.topWeight = weight;
+      p.reps = reps;
+      p.est1rm = Math.round(e1rm);
+    }
   }
-  return points;
+  return [...bySession.values()];
 }
 
 // Best lift per exercise, ranked — a real "how strong am I" view across the

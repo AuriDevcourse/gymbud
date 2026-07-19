@@ -20,25 +20,22 @@ export function todayISO(): string {
   return dayKey(new Date());
 }
 
+// Short chart tick ("5 Jan"), pinned to APP_TZ so SSR and the client agree on
+// which day a near-midnight session lands on.
+const labelFmt = new Intl.DateTimeFormat("en-GB", {
+  timeZone: APP_TZ,
+  day: "numeric",
+  month: "short",
+});
 export function dayLabel(s: string): string {
-  const d = parseDbDate(s);
-  return d.toLocaleDateString(undefined, {
-    weekday: "short",
-    day: "numeric",
-    month: "short",
-  });
+  return labelFmt.format(parseDbDate(s));
 }
 
-// Midnight (local) of a date, as an epoch ms. Used to count CALENDAR days
-// between two instants, not elapsed hours.
-function localDayStart(d: Date): number {
-  return new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
-}
-
-// Whole calendar days between a stored date and now, in local time. A workout
-// last night is "1" this morning (Yesterday), not "0" until 24h have elapsed.
+// Whole calendar days between a stored date and now, in APP_TZ (dayKey strings
+// parse as UTC midnights, so the diff is exact days). A workout last night is
+// "1" this morning (Yesterday), not "0" until 24h have elapsed.
 export function calendarDaysAgo(s: string): number {
-  const diff = localDayStart(new Date()) - localDayStart(parseDbDate(s));
+  const diff = Date.parse(dayKey(new Date())) - Date.parse(dayKey(parseDbDate(s)));
   return Math.round(diff / 86_400_000);
 }
 
