@@ -10,7 +10,18 @@ import { RUN_KIND_LABELS, type Run, type RunKind } from "@/lib/types";
 
 const KINDS = Object.keys(RUN_KIND_LABELS) as RunKind[];
 
-export function RunLogger() {
+export function RunLogger({
+  sessionId,
+  onSaved,
+  trigger,
+}: {
+  /** attach the run to this workout session (e.g. the one in progress) */
+  sessionId?: number;
+  /** called with the saved run (used by the workout screen to show it inline) */
+  onSaved?: (run: Run) => void;
+  /** custom open button; default is the home-screen card */
+  trigger?: (open: () => void) => React.ReactNode;
+} = {}) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [km, setKm] = useState("");
@@ -20,8 +31,9 @@ export function RunLogger() {
   const [error, setError] = useState<string | null>(null);
 
   const save = async () => {
-    const distance = parseFloat(km) || 0;
-    const minutes = parseFloat(min);
+    // Danish/Lithuanian keyboards type "5,2" — accept both decimal separators.
+    const distance = parseFloat(km.replace(",", ".")) || 0;
+    const minutes = parseFloat(min.replace(",", "."));
     if (!minutes || minutes <= 0) {
       setError("Add a time.");
       return;
@@ -34,14 +46,20 @@ export function RunLogger() {
     setBusy(true);
     setError(null);
     try {
-      await api<Run>("/api/runs", {
+      const saved = await api<Run>("/api/runs", {
         method: "POST",
-        body: JSON.stringify({ distance, duration: Math.round(minutes * 60), kind }),
+        body: JSON.stringify({
+          distance,
+          duration: Math.round(minutes * 60),
+          kind,
+          ...(sessionId ? { sessionId } : {}),
+        }),
       });
       setOpen(false);
       setKm("");
       setMin("");
       setKind("long");
+      onSaved?.(saved);
       router.refresh(); // refresh streak + stats on the home screen
     } catch (e) {
       setError((e as Error).message);
@@ -57,17 +75,25 @@ export function RunLogger() {
 
   return (
     <>
-      <button onClick={() => setOpen(true)} className="block w-full text-left">
-        <Card className="flex items-center gap-3">
-          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-accent/15 text-accent">
-            <Footprints size={20} aria-hidden="true" />
-          </span>
-          <div>
-            <p className="font-semibold">Run</p>
-            <p className="text-sm text-muted">Log a run, counts to your streak</p>
-          </div>
-        </Card>
-      </button>
+      {trigger ? (
+        trigger(() => setOpen(true))
+      ) : (
+        <button onClick={() => setOpen(true)} className="block w-full text-left">
+          <Card className="flex items-center gap-3">
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-accent/15 text-accent">
+              <Footprints size={20} aria-hidden="true" />
+            </span>
+            <div>
+              <p className="font-semibold">Run</p>
+              <p className="text-sm text-muted">
+                {sessionId
+                  ? "Log a run — it joins your current workout"
+                  : "Log a run, counts to your streak"}
+              </p>
+            </div>
+          </Card>
+        </button>
+      )}
 
       <Sheet open={open} onClose={() => setOpen(false)} title="Run">
         <div className="flex flex-col gap-3">

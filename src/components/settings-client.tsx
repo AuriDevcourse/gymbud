@@ -1,10 +1,11 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeft, Check, Loader2, Lock } from "lucide-react";
 import { Button, LoadError, SectionTitle } from "./ui";
+import { StravaConnect } from "./strava-connect";
 import { api } from "@/lib/format";
 import { peek, poke } from "@/lib/swr";
 import { PageSkeleton } from "./skeleton";
@@ -199,6 +200,11 @@ export function SettingsClient() {
           })}
         </div>
       </section>
+
+      {/* Suspense: useSearchParams (OAuth result toast) needs a boundary */}
+      <Suspense fallback={null}>
+        <StravaConnect />
+      </Suspense>
 
       {authOn && (
         <Button variant="outline" size="lg" className="mt-2 w-full" onClick={lock}>

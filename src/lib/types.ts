@@ -34,6 +34,7 @@ export interface Run {
   kind: RunKind;
   loggedAt: string; // YYYY-MM-DD
   note: string | null;
+  sessionId: number | null; // set when the run was part of a workout session
 }
 
 export interface WorkoutStats {

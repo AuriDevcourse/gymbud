@@ -74,6 +74,7 @@ export const runSchema = z.object({
     .regex(/^\d{4}-\d{2}-\d{2}$/, "Date must be YYYY-MM-DD.")
     .optional(),
   note: z.string().max(300).nullable().optional(),
+  sessionId: z.number().int().positive().optional(), // attach to a workout session
 });
 
 export const bodyWeightSchema = z.object({

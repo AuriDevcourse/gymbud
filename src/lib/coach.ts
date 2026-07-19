@@ -5,7 +5,7 @@ import {
   type Exercise,
   type MuscleGroup,
 } from "./exercise-library";
-import { repRangeFor, weightStep } from "./loading";
+import { repRangeFor, snapWeight, weightStep } from "./loading";
 import { REP_RANGE, type Difficulty, type Goal, type Recommendation, type Unit } from "./types";
 
 type SetInput = { weight: number; reps: number };
@@ -45,16 +45,23 @@ export function recommendNext(
     };
   }
 
-  const range = ex ? repRangeFor(goal, ex.type) : REP_RANGE[goal];
+  const range = ex ? repRangeFor(goal, ex.type, ex.muscleGroup) : REP_RANGE[goal];
   const step = ex ? weightStep(ex, unit) : increment(unit);
   const u = unit;
+  // Suggestions must be weights that exist on the machine: snap lb-stack
+  // equipment (cable/machine) to real pin positions — 41, not 40.
+  const round = (w: number): number => {
+    const snapped = ex ? snapWeight(ex, unit, w) : w;
+    const grain = unit === "kg" ? 0.5 : 1;
+    return Math.round(snapped / grain) * grain;
+  };
 
   // Below the bottom of the range -> too heavy, ease off and rebuild.
   if (cur.reps < range.low) {
     return {
       action: "back_off",
       reason: `Only ${cur.reps} reps at ${cur.weight}${u}, below your ${range.low}-rep target. Drop a touch and own the form.`,
-      suggestedWeight: round(Math.max(0, cur.weight - step), u),
+      suggestedWeight: round(Math.max(0, cur.weight - step)),
       lastTopSet: last,
     };
   }
@@ -65,7 +72,7 @@ export function recommendNext(
     return {
       action: "maintain",
       reason: `You rated this hard at ${cur.weight}${u}. Stay here until it feels solid, then add weight.`,
-      suggestedWeight: round(cur.weight, u),
+      suggestedWeight: round(cur.weight),
       lastTopSet: last,
     };
   }
@@ -80,7 +87,7 @@ export function recommendNext(
     return {
       action: "increase",
       reason,
-      suggestedWeight: round(cur.weight + step, u),
+      suggestedWeight: round(cur.weight + step),
       lastTopSet: last,
     };
   }
@@ -95,14 +102,9 @@ export function recommendNext(
   return {
     action: "maintain",
     reason,
-    suggestedWeight: round(cur.weight, u),
+    suggestedWeight: round(cur.weight),
     lastTopSet: last,
   };
-}
-
-function round(w: number, unit: Unit): number {
-  const step = unit === "kg" ? 0.5 : 1;
-  return Math.round(w / step) * step;
 }
 
 // ── Substitution ────────────────────────────────────────────────────────
@@ -216,7 +218,7 @@ export const LENGTH_LABELS: Record<WorkoutLength, string> = {
 const LENGTH_COUNT: Record<WorkoutLength, number> = { short: 4, medium: 6, long: 8 };
 
 const FOCUS_MUSCLES: Record<Exclude<WorkoutFocus, "auto">, MuscleGroup[]> = {
-  full_body: ["quads", "back", "chest", "shoulders", "hamstrings", "core"],
+  full_body: ["quads", "back", "chest", "shoulders", "hamstrings", "core", "biceps", "triceps"],
   upper: ["back", "chest", "shoulders", "traps", "biceps", "triceps", "core"],
   lower: ["quads", "hamstrings", "glutes", "calves"],
   push: ["chest", "shoulders", "triceps"],
@@ -262,7 +264,7 @@ export function suggestWorkout(opts: {
   } else if (opts.daysPerWeek <= 3) {
     // Full-body: one compound from each region + accessories for the stalest.
     title = "Full Body";
-    focus = ["quads", "back", "chest", "shoulders", "hamstrings", "core"];
+    focus = [...FOCUS_MUSCLES.full_body];
   } else if (opts.daysPerWeek === 4) {
     const upper = (bucketStale("push") + bucketStale("pull")) / 2;
     const lower = bucketStale("legs");
@@ -336,8 +338,13 @@ function selectExercises(
     if (ex) picked.push(ex);
   }
 
-  // Pass 2: fill remaining slots with isolation work for the same muscles.
-  for (const m of muscles) {
+  // Pass 2: fill remaining slots with isolation work. Cover muscles that got
+  // NOTHING in pass 1 first — biceps/forearms have no compounds, so without
+  // this they were always squeezed out by a second chest or back slot and the
+  // user "never sees a biceps exercise".
+  const covered = new Set(picked.map((p) => p.muscleGroup));
+  const fillOrder = [...muscles.filter((m) => !covered.has(m)), ...muscles.filter((m) => covered.has(m))];
+  for (const m of fillOrder) {
     if (picked.length >= maxCount) break;
     const ex = choose(
       EXERCISES.filter(

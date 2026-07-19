@@ -25,6 +25,7 @@ import {
 import { Button, EmptyState } from "./ui";
 import { Sheet } from "./sheet";
 import { ExercisePicker } from "./exercise-picker";
+import { SessionCardio } from "./session-cardio";
 import { PENDING_WORKOUT_KEY } from "./start-suggested";
 import { CoachBadge } from "./coach-badge";
 import { ExerciseCard, type LastData } from "./exercise-card";
@@ -820,7 +821,10 @@ export function WorkoutClient() {
             <p className="mb-1.5 text-xs font-semibold uppercase tracking-widest text-muted">
               Exercise {idx + 1} of {exercises.length}
             </p>
-            <div key={se.id} className="animate-exercise-in">
+            {/* keyed by row AND movement: a swap must remount the card so the
+                composer re-prefills for the new lift instead of carrying the old
+                exercise's weight (barbell 80 total ≠ dumbbell 80 per hand) */}
+            <div key={`${se.id}:${se.exerciseId}`} className="animate-exercise-in">
               <ExerciseCard
                 se={se}
                 unit={unit}
@@ -854,6 +858,19 @@ export function WorkoutClient() {
                 </span>
               </p>
             )}
+
+            {/* Build your own workout as you go: add any lift mid-session, and
+                log cardio INTO this session so a run + lifts count as one workout. */}
+            <div className="mt-3 flex gap-2">
+              <button
+                onClick={() => setPickerOpen(true)}
+                className="flex flex-1 items-center justify-center gap-1.5 rounded-[var(--radius-md)] border border-dashed border-border bg-surface px-3 py-2.5 text-sm font-medium text-muted-strong active:bg-surface-2"
+              >
+                <Plus size={15} aria-hidden="true" />
+                Add exercise
+              </button>
+            </div>
+            <SessionCardio sessionId={session.id} />
 
             {/* Bottom bar: back · next set (until all sets logged) · next exercise.
                 Sticky just above the nav so the primary action is always in reach —

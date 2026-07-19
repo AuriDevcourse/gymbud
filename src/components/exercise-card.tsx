@@ -13,6 +13,7 @@ import {
   doseCaption,
   hasWeight,
   repRangeFor,
+  snapWeight,
   weightLabel,
   weightMode,
   weightStep,
@@ -203,7 +204,13 @@ export function ExerciseCard({
           )}
           <div className="mt-3 flex items-start gap-2">
             {showWeight && (
-              <Stepper label={wl.label} value={weight} onChange={setWeight} step={step} />
+              <Stepper
+                label={wl.label}
+                value={weight}
+                onChange={setWeight}
+                step={step}
+                snap={(v) => snapWeight(ex, unit, v)}
+              />
             )}
             <Stepper label="Reps" value={reps} onChange={setReps} step={1} min={1} />
           </div>
@@ -387,7 +394,7 @@ function Prescription({
   ex: Exercise;
 }) {
   if (!lastData) return null; // last-time data still loading
-  const range = repRangeFor(goal, ex.type);
+  const range = repRangeFor(goal, ex.type, ex.muscleGroup);
   const mode = weightMode(ex);
 
   // First time on this exercise: don't fake a number, calibrate.

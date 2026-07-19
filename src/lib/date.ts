@@ -7,11 +7,17 @@ export function parseDbDate(s: string): Date {
   return new Date(s.replace(" ", "T") + "Z");
 }
 
+// Single-user app: calendar days must be the user's, not the server's (Vercel
+// runs UTC), so day bucketing is pinned to this timezone on both sides.
+export const APP_TZ = "Europe/Copenhagen";
+
+// Calendar day of an instant in APP_TZ, as YYYY-MM-DD (en-CA gives that format).
+export function dayKey(d: Date): string {
+  return new Intl.DateTimeFormat("en-CA", { timeZone: APP_TZ }).format(d);
+}
+
 export function todayISO(): string {
-  // local calendar day, YYYY-MM-DD
-  const d = new Date();
-  const off = d.getTimezoneOffset() * 60_000;
-  return new Date(d.getTime() - off).toISOString().slice(0, 10);
+  return dayKey(new Date());
 }
 
 export function dayLabel(s: string): string {

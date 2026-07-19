@@ -78,6 +78,14 @@ const SCHEMA = `
   );
   CREATE INDEX IF NOT EXISTS idx_set_se ON set_log(session_exercise_id);
 
+  CREATE TABLE IF NOT EXISTS strava_auth (
+    id            INTEGER PRIMARY KEY CHECK (id = 1),
+    access_token  TEXT NOT NULL,
+    refresh_token TEXT NOT NULL,
+    expires_at    INTEGER NOT NULL,      -- epoch seconds
+    athlete       TEXT NOT NULL DEFAULT ''
+  );
+
   CREATE TABLE IF NOT EXISTS demo_cache (
     exercise_id  TEXT PRIMARY KEY,
     name         TEXT,
@@ -91,7 +99,7 @@ const SCHEMA = `
 `;
 
 // Bump when the demo-matching algorithm changes, to drop stale (wrong) matches.
-const DEMO_MATCH_VERSION = "5";
+const DEMO_MATCH_VERSION = "7"; // 7: curated alias map for ~20 previously demo-less lifts
 
 async function migrate(c: Client): Promise<void> {
   await c.executeMultiple(SCHEMA);
@@ -101,7 +109,10 @@ async function migrate(c: Client): Promise<void> {
     "ALTER TABLE profile ADD COLUMN name TEXT NOT NULL DEFAULT ''",
     "ALTER TABLE set_log ADD COLUMN type TEXT NOT NULL DEFAULT 'normal'",
     "ALTER TABLE run ADD COLUMN kind TEXT NOT NULL DEFAULT 'long'",
+    "ALTER TABLE run ADD COLUMN session_id INTEGER", // cardio done as part of a workout
+    "ALTER TABLE run ADD COLUMN strava_id TEXT", // Strava activity id (import dedupe)
     "ALTER TABLE session_exercise ADD COLUMN difficulty TEXT",
+    "CREATE UNIQUE INDEX IF NOT EXISTS idx_run_strava ON run(strava_id) WHERE strava_id IS NOT NULL",
   ]) {
     try {
       await c.execute(sql);

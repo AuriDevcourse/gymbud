@@ -1,6 +1,6 @@
 import type { InValue, Row } from "@libsql/client";
 import { getDb } from "./db";
-import { parseDbDate } from "./date";
+import { dayKey, parseDbDate } from "./date";
 import { EXERCISES_BY_ID, type MuscleGroup } from "./exercise-library";
 import {
   computeBadges,
@@ -109,19 +109,33 @@ export async function addBodyWeight(weight: number, loggedAt: string): Promise<B
 }
 
 // ── Runs ──────────────────────────────────────────────────────────────────
-export async function listRuns(limit = 60): Promise<Run[]> {
-  const rows = await all(
-    "SELECT id, distance, duration, kind, logged_at, note FROM run ORDER BY logged_at DESC, id DESC LIMIT ?",
-    [limit],
-  );
-  return rows.map((r) => ({
+function toRun(r: Row): Run {
+  return {
     id: num(r.id),
     distance: num(r.distance),
     duration: num(r.duration),
     kind: str(r.kind) as Run["kind"],
     loggedAt: str(r.logged_at),
     note: r.note === null ? null : str(r.note),
-  }));
+    sessionId: r.session_id === null || r.session_id === undefined ? null : num(r.session_id),
+  };
+}
+
+export async function listRuns(limit = 60): Promise<Run[]> {
+  const rows = await all(
+    "SELECT id, distance, duration, kind, logged_at, note, session_id FROM run ORDER BY logged_at DESC, id DESC LIMIT ?",
+    [limit],
+  );
+  return rows.map(toRun);
+}
+
+/** Cardio logged as part of one workout session. */
+export async function runsForSession(sessionId: number): Promise<Run[]> {
+  const rows = await all(
+    "SELECT id, distance, duration, kind, logged_at, note, session_id FROM run WHERE session_id = ? ORDER BY id ASC",
+    [sessionId],
+  );
+  return rows.map(toRun);
 }
 
 export async function addRun(
@@ -130,12 +144,13 @@ export async function addRun(
   kind: Run["kind"],
   loggedAt: string,
   note: string | null,
+  sessionId: number | null = null,
 ): Promise<Run> {
   const { lastId } = await run(
-    "INSERT INTO run (distance, duration, kind, logged_at, note) VALUES (?, ?, ?, ?, ?)",
-    [distance, duration, kind, loggedAt, note],
+    "INSERT INTO run (distance, duration, kind, logged_at, note, session_id) VALUES (?, ?, ?, ?, ?, ?)",
+    [distance, duration, kind, loggedAt, note, sessionId],
   );
-  return { id: lastId, distance, duration, kind, loggedAt, note };
+  return { id: lastId, distance, duration, kind, loggedAt, note, sessionId };
 }
 
 export async function deleteRun(id: number): Promise<void> {
@@ -143,17 +158,12 @@ export async function deleteRun(id: number): Promise<void> {
 }
 
 // ── Stats (streak + week volume) ──────────────────────────────────────────
-function localDayKey(d: Date): string {
-  const off = d.getTimezoneOffset() * 60_000;
-  return new Date(d.getTime() - off).toISOString().slice(0, 10);
-}
-
-// Monday of the week a date falls in (local), as a YYYY-MM-DD key.
+// Monday of the week a date falls in (user's timezone), as a YYYY-MM-DD key.
 function weekKey(d: Date): string {
-  const x = new Date(d);
-  const mondayOffset = (x.getDay() + 6) % 7; // 0 = Mon
-  x.setDate(x.getDate() - mondayOffset);
-  return localDayKey(x);
+  const x = new Date(dayKey(d) + "T00:00:00Z");
+  const mondayOffset = (x.getUTCDay() + 6) % 7; // 0 = Mon
+  x.setUTCDate(x.getUTCDate() - mondayOffset);
+  return x.toISOString().slice(0, 10);
 }
 
 export async function workoutStats(): Promise<WorkoutStats> {
@@ -456,6 +466,7 @@ export async function lastPerformance(
      FROM session_exercise se
      JOIN session s ON s.id = se.session_id
      WHERE se.exercise_id = ? AND s.id != ?
+       AND EXISTS (SELECT 1 FROM set_log sl WHERE sl.session_exercise_id = se.id)
      ORDER BY s.started_at DESC, se.id DESC
      LIMIT 1`,
     [exerciseId, excludeSessionId ?? -1],

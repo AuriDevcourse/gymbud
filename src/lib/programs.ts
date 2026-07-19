@@ -60,12 +60,13 @@ export const PROGRAMS: Program[] = [
       },
       {
         name: "Day C",
-        focus: "Legs · incline · row",
+        focus: "Legs · incline · row · arms",
         exercises: [
           "leg-press",
           "incline-dumbbell-bench-press",
           "cable-seated-row",
           "dumbbell-lateral-raise",
+          "dumbbell-curl",
           "cable-crunch",
         ],
       },

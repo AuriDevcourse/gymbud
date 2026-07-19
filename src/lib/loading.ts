@@ -42,20 +42,45 @@ export function weightLabel(ex: Exercise, unit: Unit): { label: string; hint?: s
 
 // Smallest sensible jump for the +/- buttons, by equipment.
 //  kg: dumbbell 2 · everything else 2.5 (a pair of 1.25 kg plates on a bar).
-//  lb: dumbbell 5 · everything else 5. Kept small so a barbell doesn't leap in
-//  ~4.5 kg (10 lb) chunks — the fine ±1.25 button under the field handles the
+//  lb: 5 across the board. Kept small so a barbell doesn't leap in ~4.5 kg
+//  (10 lb) chunks — the fine ±1.25 button under the field handles the
 //  in-between loads.
 export function weightStep(ex: Exercise, unit: Unit): number {
-  if (unit === "lb") {
-    return ex.equipment === "dumbbell" ? 5 : 5;
-  }
+  if (unit === "lb") return 5;
   return ex.equipment === "dumbbell" ? 2 : 2.5;
 }
+
+// Pin-loaded stacks (cable towers, selectorized machines) are labelled in lb at
+// many gyms, so their kg conversions land between round numbers — there is no
+// 40 kg on the stack, only 90 lb ≈ 41 kg. Snap kg targets for these machines to
+// the nearest real 5 lb position (then to 0.5 kg for a readable number) so the
+// app suggests weights that actually exist on the pin.
+const LB_PER_KG = 2.20462;
+export function usesLbStack(ex: Pick<Exercise, "equipment">): boolean {
+  return ex.equipment === "cable" || ex.equipment === "machine";
+}
+
+export function snapWeight(ex: Pick<Exercise, "equipment">, unit: Unit, w: number): number {
+  if (w <= 0) return Math.max(0, w);
+  if (unit !== "kg" || !usesLbStack(ex)) return w;
+  const lb = Math.max(5, Math.round((w * LB_PER_KG) / 5) * 5);
+  return Math.round((lb / LB_PER_KG) * 2) / 2;
+}
+
+// Endurance-dominant muscles that respond to high reps whatever the goal —
+// nobody 5-rep-maxes a crunch or a calf raise.
+const HIGH_REP_MUSCLES = new Set<MuscleGroup>(["core", "calves"]);
 
 // Rep target, nudged by movement type: compounds sit at the lower (heavier) end
 // of the goal range, isolation work at the higher (lighter) end. Feeds both the
 // on-screen prescription and the progression coach so they always agree.
-export function repRangeFor(goal: Goal, type: Exercise["type"]): { low: number; high: number } {
+export function repRangeFor(
+  goal: Goal,
+  type: Exercise["type"],
+  muscleGroup?: MuscleGroup,
+): { low: number; high: number } {
+  // Abs and calves: 12–15 reps regardless of goal (e.g. 15·15·12·12 across sets).
+  if (muscleGroup && HIGH_REP_MUSCLES.has(muscleGroup)) return { low: 12, high: 15 };
   const base = REP_RANGE[goal];
   if (type === "compound") {
     return { low: base.low, high: Math.max(base.low + 2, base.high - 3) };
@@ -88,9 +113,10 @@ export function targetSetsFor(
   if (goal === "strength") sets = [3, 4, 5][role];
   else if (goal === "muscle_gain") sets = [2, 3, 4][role];
   else sets = [2, 2, 3][role]; // fat_loss, general
-  // Abs are high-rep, fatigue-resistant work — 2 sets barely touches them. Give
-  // core at least 3 so an ab finisher is actually a stimulus.
-  if (ex.muscleGroup === "core") sets = Math.max(sets, 3);
+  // Abs and calves are high-rep, fatigue-resistant work — 2 sets barely touches
+  // them. Prescribe 4 (e.g. abs 15·15·12·12, calves 4×15) so the finisher is a
+  // real stimulus.
+  if (HIGH_REP_MUSCLES.has(ex.muscleGroup)) sets = Math.max(sets, 4);
   return sets;
 }
 
@@ -111,7 +137,7 @@ export function restSecondsFor(goal: Goal, ex?: Pick<Exercise, "type" | "muscleG
 
 // One-line "why this dose" caption for the card.
 export function doseCaption(goal: Goal, ex: Pick<Exercise, "type" | "muscleGroup">): string {
-  const r = repRangeFor(goal, ex.type);
+  const r = repRangeFor(goal, ex.type, ex.muscleGroup);
   const sets = targetSetsFor(goal, ex);
   const kind = ex.type === "compound" ? "Compound" : "Isolation";
   return `${kind} · ${sets} sets × ${r.low} to ${r.high} reps`;

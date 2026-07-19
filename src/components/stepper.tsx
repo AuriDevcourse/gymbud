@@ -11,6 +11,7 @@ export function Stepper({
   min = 0,
   max = 9999,
   suffix,
+  snap,
 }: {
   label: string;
   value: number;
@@ -19,6 +20,9 @@ export function Stepper({
   min?: number;
   max?: number;
   suffix?: string;
+  /** applied to +/- jumps only (never to typed values) — e.g. snap a cable
+      stack to real lb pin positions */
+  snap?: (v: number) => number;
 }) {
   const clamp = (v: number) => Math.min(max, Math.max(min, v));
   const set = (v: number) => onChange(clamp(Math.round(v * 100) / 100));
@@ -38,7 +42,7 @@ export function Stepper({
         <button
           type="button"
           aria-label={`Decrease ${label}`}
-          onClick={() => set(value - step)}
+          onClick={() => set(snap ? snap(value - step) : value - step)}
           className="flex h-12 w-12 shrink-0 items-center justify-center rounded-[var(--radius-md)] border border-border bg-surface-2 text-muted-strong active:bg-surface-3"
         >
           <Minus size={20} aria-hidden="true" />
@@ -72,7 +76,7 @@ export function Stepper({
         <button
           type="button"
           aria-label={`Increase ${label}`}
-          onClick={() => set(value + step)}
+          onClick={() => set(snap ? snap(value + step) : value + step)}
           className="flex h-12 w-12 shrink-0 items-center justify-center rounded-[var(--radius-md)] border border-border bg-surface-2 text-accent active:bg-surface-3"
         >
           <Plus size={20} aria-hidden="true" />

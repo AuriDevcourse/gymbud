@@ -1506,8 +1506,21 @@ export const EXERCISES: Exercise[] = [
     type: "isolation",
     alternatives: [
       "hanging-leg-raise",
-      "captain-chair-leg-raise",
+      "side-lying-leg-raise",
       "cable-leg-raise",
+    ],
+  },
+  {
+    id: "side-lying-leg-raise",
+    name: "Side-Lying Leg Raise",
+    muscleGroup: "core",
+    secondary: ["glutes"],
+    equipment: "bodyweight",
+    type: "isolation",
+    alternatives: [
+      "lying-leg-raise",
+      "side-plank",
+      "hip-abduction-machine",
     ],
   },
   {

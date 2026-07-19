@@ -16,6 +16,15 @@ export function Sheet({
 }) {
   const dialogRef = useRef<HTMLDivElement>(null);
 
+  // Keep the latest onClose in a ref so the effect below depends only on `open`.
+  // Callers pass inline arrows, so a dep on onClose would re-run the effect on
+  // every parent render — stealing focus back to the first control after each
+  // keystroke and dismissing the mobile keyboard mid-input.
+  const onCloseRef = useRef(onClose);
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  }, [onClose]);
+
   useEffect(() => {
     if (!open) return;
     const dialog = dialogRef.current;
@@ -34,7 +43,7 @@ export function Sheet({
 
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
-        onClose();
+        onCloseRef.current();
         return;
       }
       // simple focus trap so Tab can't leave the modal
@@ -66,7 +75,7 @@ export function Sheet({
       document.body.style.overflow = "";
       prevFocused?.focus?.(); // restore focus to the trigger
     };
-  }, [open, onClose]);
+  }, [open]);
 
   if (!open) return null;
 

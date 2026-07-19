@@ -75,7 +75,41 @@ const MODIFIERS = [
 
 const norm = (s: string) => s.toLowerCase().replace(/-/g, " ");
 
+// Hand-curated matches for lifts the scorer can't find on its own (naming gaps
+// in the Free Exercise DB — e.g. it calls a woodchop "Wood Chop", files reverse
+// curls under biceps, and has no plain dumbbell deadlift). Value is the EXACT
+// `name` of the entry to use. Only add pairs whose demo genuinely shows the
+// same movement; a lift with no honest match stays demo-less on purpose.
+const CURATED: Record<string, string> = {
+  "dumbbell-deadlift": "Stiff-Legged Dumbbell Deadlift",
+  "kettlebell-deadlift": "Kettlebell One-Legged Deadlift",
+  "machine-pulldown": "Full Range-Of-Motion Lat Pulldown",
+  "barbell-overhead-press": "Barbell Shoulder Press",
+  "cable-leg-extension": "Leg Extensions",
+  "cable-leg-curl": "Lying Leg Curls",
+  "band-leg-curl": "Seated Band Hamstring Curl",
+  "nordic-curl": "Natural Glute Ham Raise",
+  "machine-kickback": "One-Legged Cable Kickback",
+  "band-kickback": "Glute Kickback",
+  "cable-woodchop": "Standing Cable Wood Chop",
+  "band-woodchop": "Standing Cable Wood Chop",
+  "reverse-barbell-curl": "Reverse Barbell Curl",
+  "reverse-dumbbell-curl": "Standing Dumbbell Reverse Curl",
+  "kettlebell-overhead-tricep-extension": "Standing Dumbbell Triceps Extension",
+  "bulgarian-split-squat": "Split Squat with Dumbbells",
+  "single-leg-dumbbell-rdl": "Kettlebell One-Legged Deadlift",
+  "hip-abduction-machine": "Thigh Abductor",
+  "farmers-carry": "Farmer's Walk",
+  "dumbbell-reverse-wrist-curl": "Palms-Down Dumbbell Wrist Curl Over A Bench",
+  "side-lying-leg-raise": "Side Leg Raises",
+};
+
 function bestMatch(ex: Exercise, db: DbEntry[]): DbEntry | null {
+  const curatedName = CURATED[ex.id];
+  if (curatedName) {
+    const curated = db.find((e) => e.name === curatedName && e.images?.length);
+    if (curated) return curated;
+  }
   const exName = norm(ex.name);
   const exTokens = exName.split(/\s+/).filter((w) => !STOP.has(w));
   const exSet = new Set(exTokens);

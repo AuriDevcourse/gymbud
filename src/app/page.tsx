@@ -116,7 +116,8 @@ export default async function Home() {
 
       <StartCustom />
 
-      <RunLogger />
+      {/* a run logged while a workout is open becomes part of that workout */}
+      <RunLogger sessionId={active?.id} />
 
       <Link
         href="/exercises"
