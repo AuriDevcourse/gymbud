@@ -80,7 +80,9 @@ const norm = (s: string) => s.toLowerCase().replace(/-/g, " ");
 // curls under biceps, and has no plain dumbbell deadlift). Value is the EXACT
 // `name` of the entry to use. Only add pairs whose demo genuinely shows the
 // same movement; a lift with no honest match stays demo-less on purpose.
-const CURATED: Record<string, string> = {
+// `null` = audited, no honest entry exists AND the scorer's best guess is a
+// different movement — force demo-less rather than teach the wrong thing.
+const CURATED: Record<string, string | null> = {
   "dumbbell-deadlift": "Stiff-Legged Dumbbell Deadlift",
   "kettlebell-deadlift": "Kettlebell One-Legged Deadlift",
   "machine-pulldown": "Full Range-Of-Motion Lat Pulldown",
@@ -115,10 +117,53 @@ const CURATED: Record<string, string> = {
   "box-jump": "Front Box Jump",
   "mountain-climber": "Mountain Climbers", // DB files it under quadriceps
   "turkish-get-up": "Kettlebell Turkish Get-Up (Lunge style)",
+  // regression guards: our anatomical filing (glutes / hamstrings) differs
+  // from the DB's, which sinks these below the auto-match threshold
+  "sumo-deadlift": "Sumo Deadlift",
+  "kettlebell-snatch": "One-Arm Kettlebell Snatch",
+  // full-library audit (2026-07): the scorer's pick showed a DIFFERENT movement
+  "assisted-chin-up": "Chin-Up", // was: a bent-over row
+  "cable-pull-through": "Pull Through", // was: a seated lat pulldown
+  "band-tricep-pushdown": "Triceps Pushdown", // was: an overhead extension
+  "bodyweight-calf-raise": "Rocking Standing Calf Raise", // was: a static stretch
+  "dumbbell-wrist-curl": "Seated Dumbbell Palms-Up Wrist Curl", // was: palms-DOWN (extensors)
+  "landmine-press": "Landmine Linear Jammer", // was: a lying neck press
+  "smith-bulgarian-split-squat": "Smith Single-Leg Split Squat", // was: a lateral split squat
+  "side-plank": "Side Bridge", // was: a front plank
+  "cable-upright-row": "Upright Cable Row", // was: a rear-delt row
+  "captain-chair-leg-raise": "Knee/Hip Raise On Parallel Bars", // was: a supine hip raise
+  "sissy-squat": "Weighted Sissy Squat", // was: a plain air squat
+  "hollow-body-hold": null, // was: a rotational crunch; no hollow-hold entry exists
+  // audit: same family, but an exact / clearly better entry exists
+  "trap-bar-deadlift": "Trap Bar Deadlift",
+  "barbell-bench-press": "Barbell Bench Press - Medium Grip", // was: guillotine press
+  "push-up": "Pushups", // was: clock push-up novelty
+  "cable-fly": "Cable Crossover", // was: the incline version
+  "dumbbell-row": "One-Arm Dumbbell Row", // was: chest-supported incline row
+  "t-bar-row": "T-Bar Row with Handle",
+  "lat-pulldown": "Wide-Grip Lat Pulldown", // was: one-arm variant
+  "machine-row": "Leverage Iso Row", // was: high row
+  "cable-curl": "Standing Biceps Cable Curl", // was: preacher variant
+  "skull-crusher": "Lying Triceps Press", // was: press/crusher hybrid
+  "dumbbell-skull-crusher": "Lying Dumbbell Tricep Extension", // was: band variant
+  "dumbbell-overhead-tricep-extension": "Seated Triceps Press", // was: cable rope
+  "dip": "Dips - Triceps Version", // was: bench dips
+  "diamond-push-up": "Push-Ups - Close Triceps Position", // was: "Body-Up"
+  "barbell-calf-raise": "Standing Barbell Calf Raise", // was: seated
+  "glute-bridge": "Butt Lift (Bridge)", // was: single-leg variant
+  "bicycle-crunch": "Air Bike", // was: plain crunch, no rotation
+  "dumbbell-rear-delt-fly": "Seated Bent-Over Rear Delt Raise", // was: lying-prone
+  "ez-bar-curl": "EZ-Bar Curl", // was: straight-bar curl
+  "machine-lateral-raise": "Side Lateral Raise", // no machine entry; honest pattern
+  // audit: honest matches found for previously demo-less lifts
+  "band-curl": "Standing Biceps Cable Curl", // constant-tension standing curl
+  "band-leg-extension": "Leg Extensions",
+  "cable-leg-raise": "Cable Reverse Crunch",
 };
 
 function bestMatch(ex: Exercise, db: DbEntry[]): DbEntry | null {
   const curatedName = CURATED[ex.id];
+  if (curatedName === null) return null; // audited: nothing honest to show
   if (curatedName) {
     const curated = db.find((e) => e.name === curatedName && e.images?.length);
     if (curated) return curated;
