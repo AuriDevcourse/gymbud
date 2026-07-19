@@ -179,6 +179,7 @@ export const EXERCISES: Exercise[] = [
       "cable-fly",
       "machine-fly",
       "incline-cable-fly",
+      "incline-dumbbell-fly",
     ],
   },
   {
@@ -219,6 +220,7 @@ export const EXERCISES: Exercise[] = [
       "incline-barbell-bench-press",
       "dumbbell-fly",
       "cable-fly",
+      "incline-dumbbell-fly",
     ],
   },
 
@@ -235,6 +237,7 @@ export const EXERCISES: Exercise[] = [
       "dumbbell-deadlift",
       "smith-deadlift",
       "cable-pull-through",
+      "rack-pull",
     ],
   },
   {
@@ -248,6 +251,7 @@ export const EXERCISES: Exercise[] = [
       "barbell-deadlift",
       "dumbbell-deadlift",
       "smith-deadlift",
+      "sumo-deadlift",
     ],
   },
   {
@@ -302,6 +306,7 @@ export const EXERCISES: Exercise[] = [
       "cable-seated-row",
       "machine-row",
       "t-bar-row",
+      "chest-supported-row",
     ],
   },
   {
@@ -329,6 +334,7 @@ export const EXERCISES: Exercise[] = [
       "cable-seated-row",
       "barbell-bent-over-row",
       "dumbbell-row",
+      "chest-supported-row",
     ],
   },
   {
@@ -460,7 +466,7 @@ export const EXERCISES: Exercise[] = [
     secondary: ["shoulders", "forearms"],
     equipment: "barbell",
     type: "isolation",
-    alternatives: ["dumbbell-shrug", "cable-shrug", "smith-shrug", "trap-bar-shrug"],
+    alternatives: ["dumbbell-shrug", "cable-shrug", "smith-shrug", "trap-bar-shrug", "machine-shrug"],
   },
   {
     id: "dumbbell-shrug",
@@ -478,7 +484,7 @@ export const EXERCISES: Exercise[] = [
     secondary: ["shoulders"],
     equipment: "cable",
     type: "isolation",
-    alternatives: ["dumbbell-shrug", "barbell-shrug", "smith-shrug"],
+    alternatives: ["dumbbell-shrug", "barbell-shrug", "smith-shrug", "machine-shrug"],
   },
   {
     id: "smith-shrug",
@@ -512,6 +518,7 @@ export const EXERCISES: Exercise[] = [
       "smith-overhead-press",
       "machine-shoulder-press",
       "cable-shoulder-press",
+      "push-press",
     ],
   },
   {
@@ -715,6 +722,7 @@ export const EXERCISES: Exercise[] = [
       "cable-curl",
       "machine-curl",
       "ez-bar-curl",
+      "drag-curl",
     ],
   },
   {
@@ -777,6 +785,7 @@ export const EXERCISES: Exercise[] = [
       "dumbbell-curl",
       "cable-curl",
       "band-curl",
+      "zottman-curl",
     ],
   },
   {
@@ -854,6 +863,7 @@ export const EXERCISES: Exercise[] = [
       "band-tricep-pushdown",
       "skull-crusher",
       "dip",
+      "dumbbell-tricep-kickback",
     ],
   },
   {
@@ -974,6 +984,7 @@ export const EXERCISES: Exercise[] = [
       "smith-squat",
       "hack-squat",
       "dumbbell-goblet-squat",
+      "single-leg-press",
     ],
   },
   {
@@ -1002,6 +1013,7 @@ export const EXERCISES: Exercise[] = [
       "leg-press",
       "kettlebell-goblet-squat",
       "smith-squat",
+      "dumbbell-sumo-squat",
     ],
   },
   {
@@ -1016,6 +1028,7 @@ export const EXERCISES: Exercise[] = [
       "dumbbell-goblet-squat",
       "barbell-back-squat",
       "leg-press",
+      "kettlebell-front-squat",
     ],
   },
   {
@@ -1157,6 +1170,7 @@ export const EXERCISES: Exercise[] = [
       "seated-leg-curl",
       "cable-leg-curl",
       "romanian-deadlift",
+      "glute-ham-raise",
     ],
   },
   {
@@ -1205,6 +1219,7 @@ export const EXERCISES: Exercise[] = [
       "leg-curl",
       "seated-leg-curl",
       "cable-leg-curl",
+      "glute-ham-raise",
     ],
   },
 
@@ -1325,6 +1340,7 @@ export const EXERCISES: Exercise[] = [
       "dumbbell-calf-raise",
       "barbell-calf-raise",
       "bodyweight-calf-raise",
+      "donkey-calf-raise",
     ],
   },
   {
@@ -1508,6 +1524,7 @@ export const EXERCISES: Exercise[] = [
       "hanging-leg-raise",
       "side-lying-leg-raise",
       "cable-leg-raise",
+      "reverse-crunch",
     ],
   },
   {
@@ -1533,6 +1550,7 @@ export const EXERCISES: Exercise[] = [
       "plank",
       "ab-wheel-rollout",
       "crunch",
+      "dead-bug",
     ],
   },
   {
@@ -1546,6 +1564,7 @@ export const EXERCISES: Exercise[] = [
       "band-woodchop",
       "dumbbell-side-bend",
       "cable-crunch",
+      "pallof-press",
     ],
   },
   {
@@ -1585,6 +1604,8 @@ export const EXERCISES: Exercise[] = [
       "dumbbell-wrist-curl",
       "cable-wrist-curl",
       "reverse-barbell-curl",
+      "wrist-roller",
+      "behind-the-back-wrist-curl",
     ],
   },
   {
@@ -1635,6 +1656,7 @@ export const EXERCISES: Exercise[] = [
       "reverse-barbell-curl",
       "dumbbell-wrist-curl",
       "cable-wrist-curl",
+      "zottman-curl",
     ],
   },
 
@@ -1721,7 +1743,7 @@ export const EXERCISES: Exercise[] = [
     secondary: ["triceps"],
     equipment: "dumbbell",
     type: "compound",
-    alternatives: ["dumbbell-shoulder-press", "machine-shoulder-press", "barbell-overhead-press"],
+    alternatives: ["dumbbell-shoulder-press", "machine-shoulder-press", "barbell-overhead-press", "kettlebell-press"],
   },
   {
     id: "barbell-upright-row",
@@ -1730,7 +1752,7 @@ export const EXERCISES: Exercise[] = [
     secondary: ["biceps"],
     equipment: "barbell",
     type: "compound",
-    alternatives: ["cable-upright-row", "dumbbell-lateral-raise", "barbell-overhead-press"],
+    alternatives: ["cable-upright-row", "dumbbell-lateral-raise", "barbell-overhead-press", "kettlebell-sumo-high-pull"],
   },
   {
     id: "cable-upright-row",
@@ -1844,7 +1866,7 @@ export const EXERCISES: Exercise[] = [
     secondary: ["glutes"],
     equipment: "dumbbell",
     type: "compound",
-    alternatives: ["dumbbell-lunge", "bulgarian-split-squat", "walking-lunge"],
+    alternatives: ["dumbbell-lunge", "bulgarian-split-squat", "walking-lunge", "box-jump"],
   },
   {
     id: "sissy-squat",
@@ -1862,7 +1884,7 @@ export const EXERCISES: Exercise[] = [
     secondary: ["glutes", "back"],
     equipment: "barbell",
     type: "compound",
-    alternatives: ["romanian-deadlift", "dumbbell-romanian-deadlift", "nordic-curl"],
+    alternatives: ["romanian-deadlift", "dumbbell-romanian-deadlift", "nordic-curl", "back-extension"],
   },
   {
     id: "single-leg-dumbbell-rdl",
@@ -1880,7 +1902,7 @@ export const EXERCISES: Exercise[] = [
     secondary: ["glutes", "core"],
     equipment: "kettlebell",
     type: "compound",
-    alternatives: ["kettlebell-deadlift", "romanian-deadlift", "barbell-hip-thrust"],
+    alternatives: ["kettlebell-deadlift", "romanian-deadlift", "barbell-hip-thrust", "kettlebell-clean"],
   },
   // Glutes
   {
@@ -1889,7 +1911,7 @@ export const EXERCISES: Exercise[] = [
     muscleGroup: "glutes",
     equipment: "machine",
     type: "isolation",
-    alternatives: ["cable-glute-kickback", "glute-bridge", "machine-hip-thrust"],
+    alternatives: ["cable-glute-kickback", "glute-bridge", "machine-hip-thrust", "monster-walk"],
   },
   {
     id: "cable-glute-kickback",
@@ -1940,7 +1962,7 @@ export const EXERCISES: Exercise[] = [
     muscleGroup: "core",
     equipment: "bodyweight",
     type: "isolation",
-    alternatives: ["cable-woodchop", "bicycle-crunch", "dumbbell-side-bend"],
+    alternatives: ["cable-woodchop", "bicycle-crunch", "dumbbell-side-bend", "landmine-rotation"],
   },
   {
     id: "bicycle-crunch",
@@ -1948,7 +1970,7 @@ export const EXERCISES: Exercise[] = [
     muscleGroup: "core",
     equipment: "bodyweight",
     type: "isolation",
-    alternatives: ["crunch", "russian-twist", "hanging-leg-raise"],
+    alternatives: ["crunch", "russian-twist", "hanging-leg-raise", "mountain-climber"],
   },
   {
     id: "side-plank",
@@ -1956,7 +1978,7 @@ export const EXERCISES: Exercise[] = [
     muscleGroup: "core",
     equipment: "bodyweight",
     type: "isolation",
-    alternatives: ["plank", "dumbbell-side-bend", "hollow-body-hold"],
+    alternatives: ["plank", "dumbbell-side-bend", "hollow-body-hold", "copenhagen-plank"],
   },
   // Forearms
   {
@@ -1966,7 +1988,7 @@ export const EXERCISES: Exercise[] = [
     secondary: ["core"],
     equipment: "dumbbell",
     type: "compound",
-    alternatives: ["dumbbell-wrist-curl", "plate-pinch", "barbell-wrist-curl"],
+    alternatives: ["dumbbell-wrist-curl", "plate-pinch", "barbell-wrist-curl", "dead-hang"],
   },
   {
     id: "plate-pinch",
@@ -1983,6 +2005,352 @@ export const EXERCISES: Exercise[] = [
     equipment: "dumbbell",
     type: "isolation",
     alternatives: ["dumbbell-wrist-curl", "barbell-wrist-curl", "reverse-dumbbell-curl"],
+  },
+
+  // ─── ADDED: thin groups, missing gym stations, kettlebell work ────────────
+  // Traps
+  {
+    id: "machine-shrug",
+    name: "Machine Shrug",
+    muscleGroup: "traps",
+    secondary: ["shoulders", "forearms"],
+    equipment: "machine",
+    type: "isolation",
+    alternatives: ["barbell-shrug", "dumbbell-shrug", "cable-shrug", "smith-shrug"],
+  },
+  {
+    id: "barbell-behind-the-back-shrug",
+    name: "Behind-the-Back Barbell Shrug",
+    muscleGroup: "traps",
+    secondary: ["forearms"],
+    equipment: "barbell",
+    type: "isolation",
+    alternatives: ["barbell-shrug", "smith-shrug", "machine-shrug", "dumbbell-shrug"],
+  },
+  {
+    id: "kettlebell-sumo-high-pull",
+    name: "Kettlebell Sumo High Pull",
+    muscleGroup: "traps",
+    secondary: ["shoulders", "glutes", "hamstrings"],
+    equipment: "kettlebell",
+    type: "compound",
+    load: "total", // one kettlebell held in both hands
+    alternatives: ["barbell-upright-row", "cable-upright-row", "kettlebell-swing", "dumbbell-shrug"],
+  },
+  // Calves
+  {
+    id: "donkey-calf-raise",
+    name: "Donkey Calf Raise",
+    muscleGroup: "calves",
+    equipment: "machine",
+    type: "isolation",
+    alternatives: ["standing-calf-raise", "leg-press-calf-raise", "seated-calf-raise", "smith-calf-raise"],
+  },
+  {
+    id: "tibialis-raise",
+    name: "Tibialis Raise",
+    muscleGroup: "calves", // nearest enum bucket; it's the shin (dorsiflexor)
+    equipment: "bodyweight",
+    type: "isolation",
+    // no honest same-movement swap in the library: calf raises are the antagonist
+    alternatives: [],
+  },
+  // Forearms
+  {
+    id: "wrist-roller",
+    name: "Wrist Roller",
+    muscleGroup: "forearms",
+    equipment: "bodyweight",
+    type: "isolation",
+    load: "total", // the plate hung from the roller is the whole load
+    alternatives: ["barbell-wrist-curl", "dumbbell-wrist-curl", "dumbbell-reverse-wrist-curl", "farmers-carry"],
+  },
+  {
+    id: "behind-the-back-wrist-curl",
+    name: "Behind-the-Back Wrist Curl",
+    muscleGroup: "forearms",
+    equipment: "barbell",
+    type: "isolation",
+    alternatives: ["barbell-wrist-curl", "dumbbell-wrist-curl", "cable-wrist-curl"],
+  },
+  {
+    id: "dead-hang",
+    name: "Dead Hang",
+    muscleGroup: "forearms",
+    secondary: ["back", "shoulders"],
+    equipment: "bodyweight",
+    type: "isolation",
+    alternatives: ["farmers-carry", "plate-pinch", "wrist-roller"],
+  },
+  {
+    id: "zottman-curl",
+    name: "Zottman Curl",
+    muscleGroup: "biceps",
+    secondary: ["forearms"],
+    equipment: "dumbbell",
+    type: "isolation",
+    alternatives: ["reverse-dumbbell-curl", "hammer-curl", "reverse-barbell-curl", "dumbbell-wrist-curl"],
+  },
+  // Hamstrings
+  {
+    id: "glute-ham-raise",
+    name: "Glute-Ham Raise",
+    muscleGroup: "hamstrings",
+    secondary: ["glutes", "back"],
+    equipment: "machine",
+    type: "isolation",
+    load: "added", // bodyweight on the GHD; hold a plate to add load
+    alternatives: ["nordic-curl", "leg-curl", "seated-leg-curl", "romanian-deadlift"],
+  },
+  {
+    id: "sumo-deadlift",
+    name: "Sumo Deadlift",
+    muscleGroup: "glutes",
+    secondary: ["quads", "hamstrings", "back"],
+    equipment: "barbell",
+    type: "compound",
+    alternatives: ["barbell-deadlift", "romanian-deadlift", "trap-bar-deadlift", "rack-pull"],
+  },
+  {
+    id: "kettlebell-clean",
+    name: "Kettlebell Clean",
+    muscleGroup: "hamstrings",
+    secondary: ["glutes", "shoulders", "forearms"],
+    equipment: "kettlebell",
+    type: "compound",
+    alternatives: ["kettlebell-swing", "kettlebell-deadlift", "dumbbell-romanian-deadlift"],
+  },
+  // Glutes
+  {
+    id: "hip-adduction-machine",
+    name: "Hip Adduction Machine",
+    muscleGroup: "glutes",
+    equipment: "machine",
+    type: "isolation",
+    alternatives: ["dumbbell-sumo-squat", "copenhagen-plank", "barbell-back-squat"],
+  },
+  {
+    id: "reverse-hyperextension",
+    name: "Reverse Hyperextension",
+    muscleGroup: "glutes",
+    secondary: ["hamstrings", "back"],
+    equipment: "machine",
+    type: "isolation",
+    alternatives: ["back-extension", "barbell-hip-thrust", "glute-bridge", "machine-kickback"],
+  },
+  {
+    id: "dumbbell-sumo-squat",
+    name: "Dumbbell Sumo Squat",
+    muscleGroup: "glutes",
+    secondary: ["quads", "hamstrings"],
+    equipment: "dumbbell",
+    type: "compound",
+    load: "total", // one dumbbell held in both hands, not one per hand
+    alternatives: ["dumbbell-goblet-squat", "kettlebell-goblet-squat", "hip-adduction-machine", "barbell-back-squat"],
+  },
+  {
+    id: "monster-walk",
+    name: "Monster Walk",
+    muscleGroup: "glutes",
+    equipment: "band",
+    type: "isolation",
+    load: "none", // band tension only — nothing to enter
+    alternatives: ["hip-abduction-machine", "band-kickback", "side-lying-leg-raise", "cable-glute-kickback"],
+  },
+  // Back
+  {
+    id: "rack-pull",
+    name: "Rack Pull",
+    muscleGroup: "back",
+    secondary: ["traps", "glutes", "forearms"],
+    equipment: "barbell",
+    type: "compound",
+    alternatives: ["barbell-deadlift", "trap-bar-deadlift", "smith-deadlift", "barbell-shrug"],
+  },
+  {
+    id: "chest-supported-row",
+    name: "Chest-Supported Dumbbell Row",
+    muscleGroup: "back",
+    secondary: ["biceps"],
+    equipment: "dumbbell",
+    type: "compound",
+    alternatives: ["machine-row", "dumbbell-row", "t-bar-row", "cable-seated-row"],
+  },
+  {
+    id: "back-extension",
+    name: "Back Extension",
+    muscleGroup: "glutes",
+    secondary: ["hamstrings", "back"],
+    equipment: "machine",
+    type: "isolation",
+    load: "added", // bodyweight on the 45° bench; hug a plate to add load
+    alternatives: ["reverse-hyperextension", "romanian-deadlift", "glute-bridge", "barbell-good-morning"],
+  },
+  // Shoulders
+  {
+    id: "kettlebell-press",
+    name: "Kettlebell Press",
+    muscleGroup: "shoulders",
+    secondary: ["triceps", "core"],
+    equipment: "kettlebell",
+    type: "compound",
+    alternatives: ["dumbbell-shoulder-press", "barbell-overhead-press", "arnold-press", "push-press"],
+  },
+  {
+    id: "kettlebell-snatch",
+    name: "Kettlebell Snatch",
+    muscleGroup: "hamstrings",
+    secondary: ["glutes", "shoulders", "core"],
+    equipment: "kettlebell",
+    type: "compound",
+    alternatives: ["kettlebell-press", "kettlebell-swing", "kettlebell-clean", "push-press"],
+  },
+  {
+    id: "push-press",
+    name: "Push Press",
+    muscleGroup: "shoulders",
+    secondary: ["triceps", "quads", "core"],
+    equipment: "barbell",
+    type: "compound",
+    alternatives: ["barbell-overhead-press", "dumbbell-shoulder-press", "smith-overhead-press", "kettlebell-press"],
+  },
+  // Biceps
+  {
+    id: "drag-curl",
+    name: "Drag Curl",
+    muscleGroup: "biceps",
+    equipment: "barbell",
+    type: "isolation",
+    alternatives: ["barbell-curl", "ez-bar-curl", "dumbbell-curl", "dumbbell-spider-curl"],
+  },
+  // Triceps
+  {
+    id: "dumbbell-tricep-kickback",
+    name: "Dumbbell Tricep Kickback",
+    muscleGroup: "triceps",
+    equipment: "dumbbell",
+    type: "isolation",
+    alternatives: ["cable-tricep-pushdown", "dumbbell-overhead-tricep-extension", "band-tricep-pushdown"],
+  },
+  // Quads
+  {
+    id: "single-leg-press",
+    name: "Single-Leg Press",
+    muscleGroup: "quads",
+    secondary: ["glutes", "hamstrings"],
+    equipment: "machine",
+    type: "compound",
+    alternatives: ["leg-press", "bulgarian-split-squat", "dumbbell-step-up", "hack-squat"],
+  },
+  {
+    id: "box-jump",
+    name: "Box Jump",
+    muscleGroup: "quads",
+    secondary: ["glutes", "hamstrings", "calves"],
+    equipment: "bodyweight",
+    type: "compound",
+    alternatives: ["dumbbell-step-up", "walking-lunge", "dumbbell-goblet-squat"],
+  },
+  {
+    id: "sled-push",
+    name: "Sled Push",
+    muscleGroup: "quads",
+    secondary: ["glutes", "calves", "core"],
+    equipment: "machine",
+    type: "compound",
+    alternatives: ["leg-press", "walking-lunge", "hack-squat", "dumbbell-step-up"],
+  },
+  {
+    id: "kettlebell-front-squat",
+    name: "Kettlebell Front Squat",
+    muscleGroup: "quads",
+    secondary: ["glutes", "core"],
+    equipment: "kettlebell",
+    type: "compound",
+    alternatives: ["kettlebell-goblet-squat", "barbell-front-squat", "dumbbell-goblet-squat", "barbell-back-squat"],
+  },
+  // Chest
+  {
+    id: "incline-dumbbell-fly",
+    name: "Incline Dumbbell Fly",
+    muscleGroup: "chest",
+    secondary: ["shoulders"],
+    equipment: "dumbbell",
+    type: "isolation",
+    alternatives: ["incline-cable-fly", "dumbbell-fly", "cable-fly", "machine-fly"],
+  },
+  // Core
+  {
+    id: "pallof-press",
+    name: "Pallof Press",
+    muscleGroup: "core",
+    equipment: "cable",
+    type: "isolation",
+    alternatives: ["cable-woodchop", "band-woodchop", "cable-plank", "side-plank"],
+  },
+  {
+    id: "dead-bug",
+    name: "Dead Bug",
+    muscleGroup: "core",
+    equipment: "bodyweight",
+    type: "isolation",
+    alternatives: ["hollow-body-hold", "plank", "lying-leg-raise", "bicycle-crunch"],
+  },
+  {
+    id: "mountain-climber",
+    name: "Mountain Climber",
+    muscleGroup: "core",
+    secondary: ["quads", "shoulders"],
+    equipment: "bodyweight",
+    type: "isolation",
+    alternatives: ["plank", "bicycle-crunch", "hanging-leg-raise"],
+  },
+  {
+    id: "turkish-get-up",
+    name: "Turkish Get-Up",
+    muscleGroup: "core",
+    secondary: ["shoulders", "glutes"],
+    equipment: "kettlebell",
+    type: "compound",
+    load: "total", // one bell for the whole movement, not one per hand
+    alternatives: ["kettlebell-windmill", "side-plank", "dumbbell-side-bend", "hollow-body-hold"],
+  },
+  {
+    id: "kettlebell-windmill",
+    name: "Kettlebell Windmill",
+    muscleGroup: "core",
+    secondary: ["shoulders", "hamstrings"],
+    equipment: "kettlebell",
+    type: "isolation",
+    alternatives: ["turkish-get-up", "dumbbell-side-bend", "russian-twist", "side-plank"],
+  },
+  {
+    id: "landmine-rotation",
+    name: "Landmine Rotation",
+    muscleGroup: "core",
+    secondary: ["shoulders"],
+    equipment: "barbell",
+    type: "isolation",
+    alternatives: ["cable-woodchop", "band-woodchop", "russian-twist", "pallof-press"],
+  },
+  {
+    id: "reverse-crunch",
+    name: "Reverse Crunch",
+    muscleGroup: "core",
+    equipment: "bodyweight",
+    type: "isolation",
+    alternatives: ["lying-leg-raise", "hanging-leg-raise", "crunch", "cable-crunch"],
+  },
+  // "Adductor Hold" naming keeps the demo matcher from pairing this side-lying
+  // adductor plank with a plain front-plank photo (wrong movement).
+  {
+    id: "copenhagen-plank",
+    name: "Copenhagen Adductor Hold",
+    muscleGroup: "core",
+    secondary: ["glutes"],
+    equipment: "bodyweight",
+    type: "isolation",
+    alternatives: ["side-plank", "side-lying-leg-raise", "hip-adduction-machine", "plank"],
   },
 ];
 

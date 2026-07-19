@@ -102,6 +102,19 @@ const CURATED: Record<string, string> = {
   "farmers-carry": "Farmer's Walk",
   "dumbbell-reverse-wrist-curl": "Palms-Down Dumbbell Wrist Curl Over A Bench",
   "side-lying-leg-raise": "Side Leg Raises",
+  "zottman-curl": "Zottman Curl", // filed under forearms here, biceps in the DB
+  "wrist-roller": "Wrist Roller", // scorer would pick "Wrist Circles" (a mobility drill)
+  "single-leg-press": "Leg Press", // no unilateral entry in the DB; same machine + motion
+  "donkey-calf-raise": "Donkey Calf Raises", // scorer would prefer a standing-calf photo
+  "hip-adduction-machine": "Thigh Adductor",
+  "reverse-hyperextension": "Reverse Hyperextension", // DB files it under hamstrings
+  "dumbbell-sumo-squat": "Plie Dumbbell Squat",
+  "monster-walk": "Monster Walk", // DB files it under abductors
+  "chest-supported-row": "Dumbbell Incline Row", // same movement: prone row on an incline bench
+  "back-extension": "Hyperextensions (Back Extensions)",
+  "box-jump": "Front Box Jump",
+  "mountain-climber": "Mountain Climbers", // DB files it under quadriceps
+  "turkish-get-up": "Kettlebell Turkish Get-Up (Lunge style)",
 };
 
 function bestMatch(ex: Exercise, db: DbEntry[]): DbEntry | null {

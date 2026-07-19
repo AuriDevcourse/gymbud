@@ -99,7 +99,7 @@ const SCHEMA = `
 `;
 
 // Bump when the demo-matching algorithm changes, to drop stale (wrong) matches.
-const DEMO_MATCH_VERSION = "7"; // 7: curated alias map for ~20 previously demo-less lifts
+const DEMO_MATCH_VERSION = "8"; // 8: 37 new library exercises + curated aliases for them
 
 async function migrate(c: Client): Promise<void> {
   await c.executeMultiple(SCHEMA);
