@@ -112,7 +112,9 @@ async function migrate(c: Client): Promise<void> {
     "ALTER TABLE run ADD COLUMN session_id INTEGER", // cardio done as part of a workout
     "ALTER TABLE run ADD COLUMN strava_id TEXT", // Strava activity id (import dedupe)
     "ALTER TABLE session_exercise ADD COLUMN difficulty TEXT",
+    "ALTER TABLE set_log ADD COLUMN client_key TEXT", // idempotency key for retried set POSTs
     "CREATE UNIQUE INDEX IF NOT EXISTS idx_run_strava ON run(strava_id) WHERE strava_id IS NOT NULL",
+    "CREATE UNIQUE INDEX IF NOT EXISTS idx_set_client_key ON set_log(client_key) WHERE client_key IS NOT NULL",
   ]) {
     try {
       await c.execute(sql);

@@ -42,6 +42,7 @@ export function ExerciseCard({
   goal,
   lastData,
   targetSets,
+  failedSetIds,
   commitRef,
   onValues,
   onAddSet,
@@ -57,6 +58,8 @@ export function ExerciseCard({
   lastData?: LastData;
   /** how many working sets the plan calls for (drives the "Set N of M" label) */
   targetSets: number;
+  /** temp ids of optimistic sets whose save failed — rendered in danger for retry */
+  failedSetIds?: ReadonlySet<number>;
   /** the parent's bottom-bar "Next set" button fires whatever we register here */
   commitRef: MutableRefObject<(() => void) | null>;
   /** report live composer values up so the parent can label the log button */
@@ -250,6 +253,7 @@ export function ExerciseCard({
                 index={i}
                 set={s}
                 unit={unit}
+                failed={failedSetIds?.has(s.id) ?? false}
                 onEdit={() => openEdit(s)}
                 onDelete={() => onDeleteSet(s.id)}
               />
@@ -454,12 +458,15 @@ function SetRow({
   index,
   set,
   unit,
+  failed,
   onEdit,
   onDelete,
 }: {
   index: number;
   set: SetLog;
   unit: Unit;
+  /** optimistic set whose save failed — danger tint + "not saved", retried via toast */
+  failed?: boolean;
   onEdit: () => void;
   onDelete: () => void;
 }) {
@@ -494,7 +501,11 @@ function SetRow({
   };
 
   return (
-    <li className="relative overflow-hidden rounded-[var(--radius-md)] bg-surface-2">
+    <li
+      className={`relative overflow-hidden rounded-[var(--radius-md)] bg-surface-2 ${
+        failed ? "ring-1 ring-danger/60" : ""
+      }`}
+    >
       {/* Delete button, revealed when the row is swiped left */}
       <button
         onClick={onDelete}
@@ -509,7 +520,7 @@ function SetRow({
       <div
         role="button"
         tabIndex={0}
-        aria-label={`Edit set ${index + 1}: ${label}`}
+        aria-label={`Edit set ${index + 1}: ${label}${failed ? " — not saved" : ""}`}
         onPointerDown={onDown}
         onPointerMove={onMove}
         onPointerUp={onEnd}
@@ -536,12 +547,21 @@ function SetRow({
         }}
         className="relative flex cursor-pointer select-none items-center gap-2 bg-surface-2 px-2.5 py-2.5 focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent"
       >
+        {/* danger wash over the opaque row bg (the bg must stay opaque to hide Delete) */}
+        {failed && (
+          <span aria-hidden="true" className="pointer-events-none absolute inset-0 bg-danger/10" />
+        )}
         <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-surface-3 text-[0.65rem] font-bold text-muted-strong">
           {index + 1}
         </span>
         <span className="stat-num flex-1 truncate text-sm" style={{ lineHeight: 1.35 }}>
           {label}
         </span>
+        {failed && (
+          <span className="shrink-0 rounded-full bg-danger/15 px-1.5 py-0.5 text-[0.6rem] font-bold uppercase tracking-wide text-danger">
+            not saved
+          </span>
+        )}
       </div>
     </li>
   );

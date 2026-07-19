@@ -12,6 +12,7 @@ import {
   Loader2,
   Check,
   Plus,
+  RotateCcw,
   Share2,
   Snowflake,
   Sparkles,
@@ -32,6 +33,7 @@ import { ExerciseCard, type LastData } from "./exercise-card";
 import { WorkoutSkeleton } from "./skeleton";
 import { api, fmtWeight } from "@/lib/format";
 import { tapHaptic, successHaptic, primeAudio, restDoneCue } from "@/lib/haptics";
+import { useWakeLock } from "@/lib/use-wake-lock";
 import { CountUp } from "./count-up";
 import { peek, poke, useApi } from "@/lib/swr";
 import { parseDbDate } from "@/lib/date";
@@ -59,6 +61,10 @@ import type {
 } from "@/lib/types";
 
 type RecRow = { exerciseId: string; name: string; recommendation: Recommendation };
+
+// sticky: survives the auto-dismiss (used for "set didn't save" — must be acted on)
+// retryId: temp id of a failed set; tapping the toast re-POSTs it
+type Toast = { msg: string; undo?: () => void; sticky?: boolean; retryId?: number };
 
 // monotonic negative ids for optimistic (not-yet-saved) sets
 let tempSetId = -1;
@@ -188,7 +194,15 @@ export function WorkoutClient() {
   const [restEndsAt, setRestEndsAt] = useState<number | null>(initialRest); // wall-clock end
   const [noteOpen, setNoteOpen] = useState(false);
   const [discardOpen, setDiscardOpen] = useState(false);
-  const [toast, setToast] = useState<{ msg: string; undo?: () => void } | null>(null);
+  const [toast, setToast] = useState<Toast | null>(null);
+  // temp ids of optimistic sets whose POST failed — kept on screen for retry
+  const [failedSetIds, setFailedSetIds] = useState<ReadonlySet<number>>(() => new Set());
+  // idempotency keys per optimistic row (temp id → key). The same key rides on
+  // the first POST and every retry, so a lost ack can never duplicate a set.
+  const clientKeysRef = useRef(new Map<number, string>());
+  // optimistic rows deleted while their POST was still in flight — the success
+  // reconcile must undo the server insert instead of resurrecting the row
+  const deletedTempIdsRef = useRef(new Set<number>());
 
   const [finishOpen, setFinishOpen] = useState(false);
   const [summary, setSummary] = useState<RecRow[] | null>(null);
@@ -213,6 +227,10 @@ export function WorkoutClient() {
 
   // workout phases: warm up → working sets → cool down
   const [phase, setPhase] = useState<"warmup" | "main" | "cooldown">("main");
+
+  // keep the screen awake through the lifting phase — it otherwise locks
+  // between sets and the phone is in hand the whole workout
+  useWakeLock(!!session && phase === "main");
 
   // On mount: either fulfill an optimistic "start this workout" hand-off, or
   // just revalidate the active session for a normal resume.
@@ -343,7 +361,7 @@ export function WorkoutClient() {
   }, [session, lastMap]);
 
   useEffect(() => {
-    if (!toast) return;
+    if (!toast || toast.sticky) return; // sticky toasts stay until acted on
     const t = setTimeout(() => setToast(null), 4500);
     return () => clearTimeout(t);
   }, [toast]);
@@ -445,8 +463,83 @@ export function WorkoutClient() {
   };
 
   // ── optimistic set mutations ──
+  // POST one optimistic row and reconcile it with the server's copy. Shared by
+  // addSet and the failed-set retry. On failure the row STAYS on screen, marked
+  // failed, with a sticky retry toast — a flaky basement connection must never
+  // silently eat a set.
+  const postSet = async (se: SessionExercise, row: SetLog, completesTarget: boolean) => {
+    try {
+      const real = await api<SetLog & { pr?: boolean }>(
+        `/api/session-exercises/${se.id}/sets`,
+        {
+          method: "POST",
+          body: JSON.stringify({
+            weight: row.weight,
+            reps: row.reps,
+            type: row.type,
+            // same key on first POST and retries → the server dedupes a lost ack;
+            // optimistic position → reload order matches what the lifter saw
+            clientKey: clientKeysRef.current.get(row.id),
+            setIndex: row.setIndex,
+          }),
+        },
+      );
+      clientKeysRef.current.delete(row.id);
+      if (deletedTempIdsRef.current.has(row.id)) {
+        // The row was deleted while this POST was in flight — undo the server
+        // insert. Fire-and-forget: if even this DELETE fails, the idempotency
+        // key at least stops any further duplication (one orphan row at worst).
+        deletedTempIdsRef.current.delete(row.id);
+        api(`/api/sets/${real.id}`, { method: "DELETE" }).catch(() => {});
+        // defensively clear any failed/toast state pointing at the dead row
+        setFailedSetIds((ids) => {
+          if (!ids.has(row.id)) return ids;
+          const next = new Set(ids);
+          next.delete(row.id);
+          return next;
+        });
+        setToast((t) => (t?.retryId === row.id ? null : t));
+        return;
+      }
+      setFailedSetIds((ids) => {
+        if (!ids.has(row.id)) return ids;
+        const next = new Set(ids);
+        next.delete(row.id);
+        return next;
+      });
+      patch((s) => ({
+        ...s,
+        exercises: s.exercises.map((e) =>
+          e.id === se.id
+            ? { ...e, sets: e.sets.map((x) => (x.id === row.id ? real : x)) }
+            : e,
+        ),
+      }));
+      // confetti only once the save is real AND this set completes the target —
+      // finishing the prescribed work is the moment, not every tap
+      if (completesTarget) celebrate(false);
+      if (real.pr) {
+        celebrate(true);
+        successHaptic(); // strong double-pulse for a PR
+        const nm = EXERCISES_BY_ID[se.exerciseId]?.name ?? "lift";
+        setToast({ msg: `New PR · ${nm}` });
+        setPrNames((p) => (p.includes(nm) ? p : [...p, nm]));
+      }
+    } catch {
+      if (deletedTempIdsRef.current.has(row.id)) {
+        // deleted mid-flight AND the POST failed — nothing to keep or retry
+        deletedTempIdsRef.current.delete(row.id);
+        clientKeysRef.current.delete(row.id);
+        return;
+      }
+      setFailedSetIds((ids) => new Set(ids).add(row.id));
+      setToast({ msg: "Set didn't save — tap to retry", sticky: true, retryId: row.id });
+    }
+  };
+
   const addSet = async (se: SessionExercise, weight: number, reps: number, type: SetType) => {
     const id = tempSetId--;
+    clientKeysRef.current.set(id, crypto.randomUUID()); // idempotency key, reused on retry
     const optimistic: SetLog = {
       id,
       sessionExerciseId: se.id,
@@ -461,47 +554,59 @@ export function WorkoutClient() {
         e.id === se.id ? { ...e, sets: [...e.sets, optimistic] } : e,
       ),
     }));
-    celebrate(false);
     tapHaptic(); // physical tick the instant a set is logged
     primeAudio(); // unlock audio inside this tap so the rest-end beep works on iOS
+    // start resting right away — the set happened even if the save is in flight
     const ends = Date.now() + restSecondsFor(goal, EXERCISES_BY_ID[se.exerciseId]) * 1000;
     setRestEndsAt(ends);
     if (session) store.set(restKeyFor(session.id), String(ends));
-    try {
-      const real = await api<SetLog & { pr?: boolean }>(
-        `/api/session-exercises/${se.id}/sets`,
-        {
-          method: "POST",
-          body: JSON.stringify({ weight, reps, type }),
-        },
-      );
-      patch((s) => ({
-        ...s,
-        exercises: s.exercises.map((e) =>
-          e.id === se.id
-            ? { ...e, sets: e.sets.map((x) => (x.id === id ? real : x)) }
-            : e,
-        ),
-      }));
-      if (real.pr) {
-        celebrate(true);
-        successHaptic(); // strong double-pulse for a PR
-        const nm = EXERCISES_BY_ID[se.exerciseId]?.name ?? "lift";
-        setToast({ msg: `New PR · ${nm}` });
-        setPrNames((p) => (p.includes(nm) ? p : [...p, nm]));
-      }
-    } catch (e) {
-      patch((s) => ({
-        ...s,
-        exercises: s.exercises.map((e) =>
-          e.id === se.id ? { ...e, sets: e.sets.filter((x) => x.id !== id) } : e,
-        ),
-      }));
-      setError((e as Error).message);
-    }
+    // does this set finish the prescribed working sets? (gates the confetti)
+    const ex = EXERCISES_BY_ID[se.exerciseId];
+    const workingAfter =
+      se.sets.filter((x) => x.type !== "warmup").length + (type !== "warmup" ? 1 : 0);
+    const completesTarget = !!ex && type !== "warmup" && workingAfter === targetSetsFor(goal, ex);
+    await postSet(se, optimistic, completesTarget);
+  };
+
+  // Toast tap: re-POST a failed set (possibly edited since), keeping the same
+  // temp row until the server's copy replaces it. The rest timer is NOT
+  // restarted — the rest already began when the set was first logged.
+  const retryFailedSet = (tempId: number) => {
+    setToast(null);
+    const se = session?.exercises.find((e) => e.sets.some((x) => x.id === tempId));
+    const row = se?.sets.find((x) => x.id === tempId);
+    if (!se || !row) return;
+    const ex = EXERCISES_BY_ID[se.exerciseId];
+    const working = se.sets.filter((x) => x.type !== "warmup").length; // row included
+    const completesTarget = !!ex && row.type !== "warmup" && working === targetSetsFor(goal, ex);
+    postSet(se, row, completesTarget);
   };
 
   const deleteSet = async (se: SessionExercise, setId: number) => {
+    // An optimistic (negative temp id) set has no server row to DELETE — drop it
+    // locally. Failed: also clear its retry state. Still in flight: flag it so
+    // postSet's success reconcile undoes the server insert instead of
+    // resurrecting the row.
+    if (setId < 0) {
+      patch((s) => ({
+        ...s,
+        exercises: s.exercises.map((e) =>
+          e.id === se.id ? { ...e, sets: e.sets.filter((x) => x.id !== setId) } : e,
+        ),
+      }));
+      if (failedSetIds.has(setId)) {
+        setFailedSetIds((ids) => {
+          const next = new Set(ids);
+          next.delete(setId);
+          return next;
+        });
+        clientKeysRef.current.delete(setId); // no POST in flight — key is dead
+      } else {
+        deletedTempIdsRef.current.add(setId); // postSet cleans up when it settles
+      }
+      setToast((t) => (t?.retryId === setId ? null : t));
+      return;
+    }
     const idx = se.sets.findIndex((x) => x.id === setId);
     const removed = se.sets[idx];
     patch((s) => ({
@@ -551,6 +656,8 @@ export function WorkoutClient() {
           : e,
       ),
     }));
+    // a failed (never-saved) set: only update the pending payload — retry sends it
+    if (failedSetIds.has(setId)) return;
     try {
       const real = await api<SetLog>(`/api/sets/${setId}`, {
         method: "PATCH",
@@ -585,10 +692,19 @@ export function WorkoutClient() {
       store.del(posKey(session.id));
       store.del(restKeyFor(session.id));
       setRestEndsAt(null);
-      const res = await api<{ recommendations: RecRow[] }>(
-        `/api/sessions/${session.id}/recommendations`,
-      );
-      setSummary(res.recommendations);
+      // Recommendations are a nice-to-have: the session is already saved, so
+      // the payoff screen must open even if this GET dies on gym wifi — the
+      // summary just skips next-session targets.
+      let recs: RecRow[] = [];
+      try {
+        const res = await api<{ recommendations: RecRow[] }>(
+          `/api/sessions/${session.id}/recommendations`,
+        );
+        recs = res.recommendations;
+      } catch {
+        /* summary renders without coach targets */
+      }
+      setSummary(recs);
       setFinishOpen(true);
       celebrate(true);
       successHaptic();
@@ -704,6 +820,15 @@ export function WorkoutClient() {
   if (phase === "cooldown") {
     return (
       <div className="pb-4">
+        {/* the finish PATCH can fail here — without this the tap just dies silently */}
+        {error && (
+          <div className="mb-3 flex items-center justify-between gap-2 rounded-[var(--radius-md)] border border-danger/30 bg-danger/10 px-3 py-2 text-sm text-danger">
+            {error}
+            <button onClick={() => setError(null)} aria-label="Dismiss error">
+              <X size={16} aria-hidden="true" />
+            </button>
+          </div>
+        )}
         <PhaseScreen
           kind="cooldown"
           plan={cooldownPlan(phaseExerciseIds, session.id)}
@@ -831,6 +956,7 @@ export function WorkoutClient() {
                 goal={goal}
                 lastData={lastMap[se.exerciseId]}
                 targetSets={target}
+                failedSetIds={failedSetIds}
                 commitRef={commitRef}
                 onValues={onValues}
                 onAddSet={(w, r, t) => addSet(se, w, r, t)}
@@ -937,20 +1063,34 @@ export function WorkoutClient() {
           className="fixed inset-x-0 z-[60] mx-auto flex w-full max-w-md justify-center px-4"
           style={{ bottom: "calc(5rem + env(safe-area-inset-bottom))" }}
         >
-          <div className="animate-slide-up flex items-center gap-3 rounded-full border border-border bg-surface-2 px-4 py-2.5 text-sm shadow-lg shadow-black/40">
-            <span>{toast.msg}</span>
-            {toast.undo && (
-              <button
-                onClick={() => {
-                  toast.undo?.();
-                  setToast(null);
-                }}
-                className="flex items-center gap-1 font-semibold text-accent"
-              >
-                <Undo2 size={14} aria-hidden="true" /> Undo
-              </button>
-            )}
-          </div>
+          {toast.retryId !== undefined ? (
+            /* failure toast: the whole pill is the retry button, stays until acted on */
+            <button
+              onClick={() => {
+                const id = toast.retryId;
+                if (id !== undefined) retryFailedSet(id);
+              }}
+              className="animate-slide-up flex items-center gap-2 rounded-full border border-danger/50 bg-surface-2 px-4 py-2.5 text-sm font-medium text-danger shadow-lg shadow-black/40"
+            >
+              <RotateCcw size={14} aria-hidden="true" />
+              {toast.msg}
+            </button>
+          ) : (
+            <div className="animate-slide-up flex items-center gap-3 rounded-full border border-border bg-surface-2 px-4 py-2.5 text-sm shadow-lg shadow-black/40">
+              <span>{toast.msg}</span>
+              {toast.undo && (
+                <button
+                  onClick={() => {
+                    toast.undo?.();
+                    setToast(null);
+                  }}
+                  className="flex items-center gap-1 font-semibold text-accent"
+                >
+                  <Undo2 size={14} aria-hidden="true" /> Undo
+                </button>
+              )}
+            </div>
+          )}
         </div>
       )}
 
@@ -1147,6 +1287,7 @@ function FinishSummary({
     ),
   );
   const DIFFS = Object.keys(DIFFICULTY_LABELS) as Difficulty[];
+  const hasRecs = (summary?.length ?? 0) > 0;
   const recFor = (exId: string) => summary?.find((r) => r.exerciseId === exId)?.recommendation;
   const rate = (seId: number, d: Difficulty) => {
     setRated((m) => ({ ...m, [seId]: d }));
@@ -1264,9 +1405,14 @@ function FinishSummary({
               unit={unit}
             />
           </div>
-          <p className="mb-1 text-sm font-semibold">Your plan for next session</p>
+          {/* recs can be missing (fetch failed on gym wifi) — ratings still matter */}
+          <p className="mb-1 text-sm font-semibold">
+            {hasRecs ? "Your plan for next session" : "How did each lift feel?"}
+          </p>
           <p className="mb-3 text-xs text-muted">
-            Based on today. Adjust how each lift felt if the call looks off.
+            {hasRecs
+              ? "Based on today. Adjust how each lift felt if the call looks off."
+              : "Couldn't load next-session targets — your ratings still tune the coach."}
           </p>
           <ul className="flex flex-col gap-2">
             {logged.map((e) => {

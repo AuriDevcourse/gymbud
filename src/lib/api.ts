@@ -89,6 +89,8 @@ export const setSchema = z.object({
   weight: z.number().min(0).max(1000),
   reps: z.number().int().min(1).max(100),
   type: z.enum(["normal", "warmup", "drop", "failure"]).optional(),
+  clientKey: z.string().max(64).optional(), // idempotency key: a retried POST returns the original row
+  setIndex: z.number().int().min(0).max(500).optional(), // client's optimistic position
 });
 
 export const addExerciseSchema = z.object({

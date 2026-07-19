@@ -412,17 +412,35 @@ export async function addSet(
   weight: number,
   reps: number,
   type: SetLog["type"] = "normal",
+  clientKey?: string,
+  setIndex?: number,
 ): Promise<SetLog> {
-  const max = await one(
-    "SELECT COALESCE(MAX(set_index), -1) AS m FROM set_log WHERE session_exercise_id = ?",
-    [sessionExerciseId],
+  // Prefer the client's optimistic position so reload order matches what the
+  // lifter saw even after an out-of-order retry; MAX+1 otherwise. Single-user
+  // app — a collision stays stable via ORDER BY set_index, id.
+  let idx = setIndex;
+  if (idx === undefined) {
+    const max = await one(
+      "SELECT COALESCE(MAX(set_index), -1) AS m FROM set_log WHERE session_exercise_id = ?",
+      [sessionExerciseId],
+    );
+    idx = num(max!.m) + 1;
+  }
+  // client_key is unique (partial index) — a replayed POST (ack lost on flaky
+  // wifi, client retried) is IGNOREd and we hand back the original row instead
+  // of inserting a twin.
+  const { lastId, changes } = await run(
+    "INSERT OR IGNORE INTO set_log (session_exercise_id, set_index, weight, reps, type, client_key) VALUES (?, ?, ?, ?, ?, ?)",
+    [sessionExerciseId, idx, weight, reps, type, clientKey ?? null],
   );
-  const setIndex = num(max!.m) + 1;
-  const { lastId } = await run(
-    "INSERT INTO set_log (session_exercise_id, set_index, weight, reps, type) VALUES (?, ?, ?, ?, ?)",
-    [sessionExerciseId, setIndex, weight, reps, type],
-  );
-  return { id: lastId, sessionExerciseId, setIndex, weight, reps, type };
+  if (changes === 0 && clientKey) {
+    const r = await one(
+      "SELECT id, session_exercise_id, set_index, weight, reps, type FROM set_log WHERE client_key = ?",
+      [clientKey],
+    );
+    if (r) return toSet(r);
+  }
+  return { id: lastId, sessionExerciseId, setIndex: idx, weight, reps, type };
 }
 
 // Edit a logged set in place (fix a mistyped weight/reps/type).
