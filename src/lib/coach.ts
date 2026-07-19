@@ -371,8 +371,34 @@ function selectExercises(
       ),
     );
     if (core) {
-      if (picked.length >= maxCount) picked[picked.length - 1] = core;
-      else picked.push(core);
+      if (picked.length >= maxCount) {
+        // Evict a REDUNDANTLY covered muscle, not blindly the last pick — that
+        // was always the lone isolation move (e.g. the only biceps curl), which
+        // re-created the "never any biceps" hole this pass exists to prevent.
+        // Prefer a muscle picked twice; else one already hit as a secondary
+        // (shrugs on a deadlift day); else fall back to the last pick.
+        const counts = new Map<MuscleGroup, number>();
+        for (const p of picked) counts.set(p.muscleGroup, (counts.get(p.muscleGroup) ?? 0) + 1);
+        const secondaryCovered = new Set(picked.flatMap((p) => p.secondary ?? []));
+        let evict = -1;
+        for (let i = picked.length - 1; i >= 0; i--) {
+          if ((counts.get(picked[i].muscleGroup) ?? 0) > 1) {
+            evict = i;
+            break;
+          }
+        }
+        if (evict < 0) {
+          for (let i = picked.length - 1; i >= 0; i--) {
+            if (secondaryCovered.has(picked[i].muscleGroup)) {
+              evict = i;
+              break;
+            }
+          }
+        }
+        picked[evict < 0 ? picked.length - 1 : evict] = core;
+      } else {
+        picked.push(core);
+      }
     }
   }
 
