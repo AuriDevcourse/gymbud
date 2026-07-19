@@ -108,9 +108,7 @@ export default async function Home() {
 
       {/* Recovery heatmap — which muscles are fresh vs still worked */}
       <Card className="px-3 py-4">
-        <SectionTitle right={<span className="text-xs normal-case tracking-normal text-muted">green = ready</span>}>
-          Muscle recovery
-        </SectionTitle>
+        <SectionTitle>Muscle recovery</SectionTitle>
         <RecoveryMap daysSince={daysSince} />
       </Card>
 

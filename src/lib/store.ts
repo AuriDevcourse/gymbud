@@ -606,19 +606,31 @@ export async function daysSinceByMuscle(): Promise<Partial<Record<MuscleGroup, n
      FROM session_exercise se
      JOIN session s  ON s.id = se.session_id
      JOIN set_log sl ON sl.session_exercise_id = se.id
+     WHERE COALESCE(sl.type, 'normal') != 'warmup'
      GROUP BY se.exercise_id`,
   );
 
   const now = Date.now();
   const out: Partial<Record<MuscleGroup, number>> = {};
+  const touch = (m: MuscleGroup, days: number) => {
+    const prev = out[m];
+    if (prev === undefined || days < prev) out[m] = days;
+  };
   for (const r of rows) {
     const ex = EXERCISES_BY_ID[str(r.id)];
     if (!ex) continue;
     const days = (now - parseDbDate(str(r.last)).getTime()) / 86_400_000;
-    for (const m of [ex.muscleGroup, ...(ex.secondary ?? [])]) {
-      const prev = out[m];
-      if (prev === undefined || days < prev) out[m] = days;
-    }
+    touch(ex.muscleGroup, days);
+    // a secondary touch is lighter work — read it as one day more recovered
+    for (const m of ex.secondary ?? []) touch(m, days + 1);
+  }
+
+  // runs count as leg training too — legs directly, glutes/core as secondary
+  const lastRun = await one(`SELECT MAX(logged_at) AS last FROM run`);
+  if (lastRun?.last) {
+    const days = (now - parseDbDate(str(lastRun.last)).getTime()) / 86_400_000;
+    for (const m of ["quads", "hamstrings", "calves"] as const) touch(m, days);
+    for (const m of ["glutes", "core"] as const) touch(m, days + 1);
   }
   return out;
 }

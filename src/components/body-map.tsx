@@ -211,11 +211,27 @@ export function BodyMap({ muscle }: { muscle: MuscleGroup }) {
 // (needs rest), long-rested = cool green (ready). The whole-body "it knows my
 // body" glance that Fitbod paywalls — here it's free, from data we already have.
 
-function recoveryColor(days: number | undefined): string {
-  if (days === undefined || days >= 4) return "var(--good, #46d18a)"; // fresh / ready
-  if (days >= 2) return "var(--back-off, #ffb020)"; // recovering
-  return "var(--push, #ff6a2b)"; // trained in last ~2 days, still fatigued
+type RecoveryState = "worked" | "recovering" | "ready" | "untrained";
+
+// Never-trained muscles are "no data", not "ready" — same reading the coach
+// gives them (it treats missing as maximally stale and prioritises them).
+function recoveryState(days: number | undefined): RecoveryState {
+  if (days === undefined) return "untrained";
+  if (days >= 4) return "ready";
+  if (days >= 2) return "recovering";
+  return "worked"; // trained in last ~2 days, still fatigued
 }
+
+const STATE_COLOR: Record<RecoveryState, string> = {
+  worked: "var(--push, #ff6a2b)",
+  recovering: "var(--back-off, #ffb020)",
+  ready: "var(--good, #46d18a)",
+  untrained: "#6b7280", // neutral gray, sits quietly on the dark silhouette
+};
+
+// "Recovering" also gets a diagonal hatch so the two warm states don't rely on
+// hue alone (orange vs amber is invisible to some colourblind eyes).
+const HATCH_CSS = `repeating-linear-gradient(45deg, ${STATE_COLOR.recovering} 0 2px, rgba(0,0,0,0.55) 2px 3px)`;
 
 const FRONT: MuscleGroup[] = ["chest", "shoulders", "biceps", "forearms", "core", "quads"];
 const BACK: MuscleGroup[] = ["back", "traps", "triceps", "glutes", "hamstrings", "calves"];
@@ -233,24 +249,40 @@ function HeatFigure({
         <filter id="heatGlow" x="-50%" y="-50%" width="200%" height="200%">
           <feGaussianBlur stdDeviation="3.4" />
         </filter>
+        <pattern id="heatHatch" width="3" height="3" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+          <rect width="3" height="3" fill={STATE_COLOR.recovering} />
+          <line x1="0" y1="0" x2="0" y2="3" stroke="rgba(0,0,0,0.55)" strokeWidth="1.2" />
+        </pattern>
       </defs>
       <Silhouette />
       {/* strong soft glow — the "heat" */}
       <g filter="url(#heatGlow)" opacity="0.7">
         {muscles.map((m) => (
-          <g key={m} fill={recoveryColor(daysSince[m])}>
+          <g key={m} fill={STATE_COLOR[recoveryState(daysSince[m])]}>
             {MAP[m].marks}
           </g>
         ))}
       </g>
-      {/* faint crisp core so the shape stays legible */}
-      {muscles.map((m) => (
-        <g key={m} fill={recoveryColor(daysSince[m])} opacity="0.45">
-          {MAP[m].marks}
-        </g>
-      ))}
+      {/* faint crisp core so the shape stays legible; hatch marks "recovering" */}
+      {muscles.map((m) => {
+        const state = recoveryState(daysSince[m]);
+        return (
+          <g key={m} fill={state === "recovering" ? "url(#heatHatch)" : STATE_COLOR[state]} opacity="0.45">
+            {MAP[m].marks}
+          </g>
+        );
+      })}
     </svg>
   );
+}
+
+// Screen-reader line for one muscle: "Quads — worked". State only, no date:
+// the value here is recovery-ADJUSTED (secondary/run touches carry a +1
+// discount), so phrasing it as "trained N days ago" would misstate when the
+// user actually trained.
+function srLine(m: MuscleGroup, days: number | undefined): string {
+  const name = m[0].toUpperCase() + m.slice(1);
+  return `${name} — ${days === undefined ? "untrained" : recoveryState(days)}`;
 }
 
 export function RecoveryMap({
@@ -260,7 +292,13 @@ export function RecoveryMap({
 }) {
   return (
     <div>
-      <div className="flex items-end justify-center gap-6">
+      {/* the figures are aria-hidden — this list IS the map for screen readers */}
+      <ul className="sr-only">
+        {[...FRONT, ...BACK].map((m) => (
+          <li key={m}>{srLine(m, daysSince[m])}</li>
+        ))}
+      </ul>
+      <div className="flex items-end justify-center gap-6" aria-hidden="true">
         <figure className="flex flex-col items-center">
           <HeatFigure muscles={FRONT} daysSince={daysSince} />
           <figcaption className="text-[0.6rem] uppercase tracking-wider text-muted">front</figcaption>
@@ -271,9 +309,10 @@ export function RecoveryMap({
         </figure>
       </div>
       <div className="mt-2 flex items-center justify-center gap-3 text-[0.65rem] text-muted">
-        <Legend color="var(--good, #46d18a)" label="ready" />
-        <Legend color="var(--back-off, #ffb020)" label="recovering" />
-        <Legend color="var(--push, #ff6a2b)" label="worked" />
+        <Legend color={STATE_COLOR.ready} label="ready" />
+        <Legend color={HATCH_CSS} label="recovering" />
+        <Legend color={STATE_COLOR.worked} label="worked" />
+        <Legend color={STATE_COLOR.untrained} label="untrained" />
       </div>
     </div>
   );
